@@ -1,4 +1,6 @@
 import importlib
+import os
+import sys
 from pathlib import Path
 
 from thirtyna.core import parser
@@ -21,7 +23,11 @@ def run(argv):
         modes.add_argument("-" + flag, action="store_const", dest="view", const=module)
     args = cli.parse_args(argv)
     session = MenuSession(Path.cwd(), args.target)
-    view = importlib.import_module("thirtyna.menus." + (args.view or "numbered"))
+    mode = args.view or "numbered"
+    if mode == "window" and not os.environ.get("DISPLAY") and sys.stdin.isatty() and sys.stdout.isatty():
+        print("No graphical display. Opening the numbered directory menu.", file=sys.stderr)
+        mode = "numbered"
+    view = importlib.import_module("thirtyna.menus." + mode)
     try:
         view.show(session)
     except KeyboardInterrupt:
