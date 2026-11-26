@@ -22,13 +22,16 @@ class Pane:
         self.index = 0
         self.filter = ""
 
-    def visible(self):
-        return [p for p in self.entries if self.filter.casefold() in p.name.casefold()]
+    def visible(self, show_hidden):
+        return [p for p in self.entries
+                if (show_hidden or not p.name.startswith("."))
+                and self.filter.casefold() in p.name.casefold()]
 
 
 def manage(screen, start, c, styles):
     accent, active, normal, warning = styles
     panes = [Pane(start), Pane(start)]
+    show_hidden = True
     side = 0
     show_preview = True
     message = "Tab switches destination pane   ·   ? shows all shortcuts"
@@ -73,7 +76,7 @@ def manage(screen, start, c, styles):
         for col in columns:
             panel = panes[col]
             x = col*width if wide and not show_preview else 0
-            items = panel.visible()
+            items = panel.visible(show_hidden)
             panel.index = max(0, min(panel.index, len(items)-1))
             title = ("ACTIVE" if col == side else "TARGET") + "  " + label(panel.path)
             draw(1, x, title, width-1, accent if col == side else normal)
@@ -86,7 +89,7 @@ def manage(screen, start, c, styles):
                      width-1, active if selected else normal)
             if not items:
                 draw(3, x, "  No entries", width-1, normal)
-        items = pane.visible()
+        items = pane.visible(show_hidden)
         item = items[pane.index] if items else None
         if wide and show_preview:
             draw(1, width, "PREVIEW", width, accent)
@@ -103,10 +106,11 @@ def manage(screen, start, c, styles):
                 detail = "Metadata unavailable"
         draw(h-3, 0, detail, w, accent)
         draw(h-2, 0, label(message), w, warning)
-        draw(h-1, 0, "p Preview   Enter Edit   Tab Pane   c Copy   m Move   r Rename   n File   d Folder   ? Help", w, normal)
+        draw(h-1, 0, ". Dotfiles   p Preview   Enter Edit   Tab Pane   c Copy   m Move   r Rename   n File   d Folder   ? Help", w, normal)
         if help_open:
             screen.erase()
             for y, text in enumerate(["30nA / Keyboard shortcuts", "↑ ↓ / PgUp PgDn / Home End   Select",
+                                      ".   Show / hide dotfiles in both panes",
                                       "Enter / →   Open directory     ← / Backspace   Parent",
                                       "p   Toggle preview/target      Enter on text: edit in nano",
                                       "Tab   Switch active pane      g   Go to path",
@@ -131,6 +135,14 @@ def manage(screen, start, c, styles):
                     pane.filter = ""
                 else:
                     return "back"
+            elif key == ".":
+                for panel in panes:
+                    before = panel.visible(show_hidden)
+                    after = panel.visible(not show_hidden)
+                    selected = before[panel.index] if 0 <= panel.index < len(before) else None
+                    panel.index = after.index(selected) if selected in after else 0
+                show_hidden = not show_hidden
+                message = "Dotfiles shown" if show_hidden else "Dotfiles hidden"
             elif key == "p":
                 show_preview = not show_preview
             elif key == "\t":
@@ -152,8 +164,9 @@ def manage(screen, start, c, styles):
             elif key in (c.KEY_LEFT, c.KEY_BACKSPACE, "\x7f", "\b"):
                 previous = pane.path
                 pane.open(previous.parent)
-                if previous in pane.entries:
-                    pane.index = pane.entries.index(previous)
+                siblings = pane.visible(show_hidden)
+                if previous in siblings:
+                    pane.index = siblings.index(previous)
             elif key == "g":
                 dest = ask("Open path (Esc cancels):")
                 if dest:
