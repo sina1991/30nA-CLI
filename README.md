@@ -1,12 +1,12 @@
 # 30nA-CLI
 
-ابزار شخصی Linux با سه Agent مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و اتصال با OpenSSH.
+ابزار شخصی Linux با چهار Agent مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و اتصال با OpenSSH.
 
 ## نصب از GitHub
 
 ```bash
 clear
-git clone --branch feat/initial-cli https://github.com/sina1991/30nA-CLI.git
+git clone --branch feat/menu-interfaces https://github.com/sina1991/30nA-CLI.git
 cd 30nA-CLI
 sudo ./install.sh
 ```
@@ -20,3 +20,18 @@ clear
 ```
 
 [نصب](docs/INSTALLATION_GUIDE.md) · [دستورات](docs/CLI_USER_GUIDE.md) · [معماری](docs/ARCHITECTURE_GUIDE.md) · [توسعه Agent](docs/AGENT_DEVELOPMENT_GUIDE.md) · [تست](docs/TESTING_GUIDE.md) · [وضعیت](docs/DEVELOPMENT_STATUS.md)
+
+## Menu Agent
+
+| دستور | رابط |
+|---|---|
+| `30na -menu` | فهرست منوها با انتخاب شماره |
+| `30na -menu -dir /var` | پیمایش مستقیم با شماره |
+| `30na -menu -dir /var -tui` | فلش و Enter در ترمینال |
+| `30na -menu -dir /var -gui` | پنجره مستقل Tk با ماوس |
+
+بدون مسیر، پیمایش از دایرکتوری جاری آغاز می‌شود. گزینهٔ `..` والد را باز می‌کند. Back هنگام ورود از فهرست اصلی به همان فهرست برمی‌گردد و هنگام اجرای مستقیم از برنامه خارج می‌شود. پیمایش فقط پوشه‌ها را نمایش می‌دهد و مسیر Shell را تغییر نمی‌دهد.
+
+حالت شماره‌ای به Python استاندارد نیاز دارد. برای حالت TUI یک ترمینال تعاملی با curses و برای GUI یک نشست گرافیکی با Tk لازم است. روی Ubuntu در صورت نیاز بستهٔ `python3-tk` را نصب کنید. روی SSH ساده از حالت شماره‌ای یا TUI استفاده کنید.
+
+ماژول‌های مستقل `numbered`، `terminal` و `window` فقط رابط را نمایش می‌دهند. برای افزودن یک منوی جدید یک مدل با title، items و open(target) بسازید و در MENUS در thirtyna/menus/model.py ثبت کنید.
