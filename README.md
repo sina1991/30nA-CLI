@@ -52,3 +52,11 @@ clear
 | ?، Esc، q | راهنمای کلیدها، لغو یا بازگشت، خروج |
 
 مقصد موجود بازنویسی نمی‌شود. کپی پوشه بازگشتی است و لینک‌ها به شکل لینک کپی می‌شوند. برای کپی کنار فایل اصلی، در پنل مقصد همان مسیر را نگه دارید و نام تازه بدهید. مجوز، اندازه و تاریخ آخرین تغییر مورد انتخاب‌شده در پایین صفحه نمایش داده می‌شود.
+
+## راهنمای سوییچ‌ها
+
+- [-help](docs/switches/help/README.md)
+- [-calc](docs/switches/calc/README.md)
+- [-sys](docs/switches/sys/README.md)
+- [-host](docs/switches/host/README.md)
+- [-menu](docs/switches/menu/README.md)

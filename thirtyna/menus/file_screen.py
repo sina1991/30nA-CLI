@@ -3,6 +3,7 @@ import datetime
 import stat
 from pathlib import Path
 
+from .text_view import edit, preview
 from .files import named, relocate, remove, transfer
 from .model import label
 
@@ -29,6 +30,7 @@ def manage(screen, start, c, styles):
     accent, active, normal, warning = styles
     panes = [Pane(start), Pane(start)]
     side = 0
+    show_preview = True
     message = "Tab switches destination pane   ·   ? shows all shortcuts"
     help_open = False
 
@@ -66,11 +68,11 @@ def manage(screen, start, c, styles):
         screen.erase()
         draw(0, 0, " 30nA   /   FILE MANAGER ", w, accent)
         wide = w >= 80
-        columns = [0, 1] if wide else [side]
+        columns = [0, 1] if wide and not show_preview else [side]
         width = w//2 if wide else w
         for col in columns:
             panel = panes[col]
-            x = col*width if wide else 0
+            x = col*width if wide and not show_preview else 0
             items = panel.visible()
             panel.index = max(0, min(panel.index, len(items)-1))
             title = ("ACTIVE" if col == side else "TARGET") + "  " + label(panel.path)
@@ -86,6 +88,11 @@ def manage(screen, start, c, styles):
                 draw(3, x, "  No entries", width-1, normal)
         items = pane.visible()
         item = items[pane.index] if items else None
+        if wide and show_preview:
+            draw(1, width, "PREVIEW", width, accent)
+            draw(2, width, label(item.name) if item else "", width, normal)
+            for row, text in enumerate(preview(item)[:rows]):
+                draw(3 + row, width, text, width, normal)
         detail = ""
         if item:
             try:
@@ -96,11 +103,12 @@ def manage(screen, start, c, styles):
                 detail = "Metadata unavailable"
         draw(h-3, 0, detail, w, accent)
         draw(h-2, 0, label(message), w, warning)
-        draw(h-1, 0, "Tab Pane   c Copy   m Move   r Rename   n File   d Folder   ? Help", w, normal)
+        draw(h-1, 0, "p Preview   Enter Edit   Tab Pane   c Copy   m Move   r Rename   n File   d Folder   ? Help", w, normal)
         if help_open:
             screen.erase()
             for y, text in enumerate(["30nA / Keyboard shortcuts", "↑ ↓ / PgUp PgDn / Home End   Select",
                                       "Enter / →   Open directory     ← / Backspace   Parent",
+                                      "p   Toggle preview/target      Enter on text: edit in nano",
                                       "Tab   Switch active pane      g   Go to path",
                                       "/   Filter names              Ctrl+L   Refresh",
                                       "c / m   Copy / move to other pane (prompts for name)",
@@ -123,7 +131,10 @@ def manage(screen, start, c, styles):
                     pane.filter = ""
                 else:
                     return "back"
+            elif key == "p":
+                show_preview = not show_preview
             elif key == "\t":
+                show_preview = False
                 side = 1-side
                 message = "Destination: " + str(pane.path)
             elif key == "?":
@@ -135,10 +146,14 @@ def manage(screen, start, c, styles):
             elif key in ("\n", "\r", c.KEY_ENTER, c.KEY_RIGHT) and item:
                 if item.is_dir():
                     pane.open(item)
-                else:
-                    message = str(item)
+                elif key != c.KEY_RIGHT:
+                    edit(screen, c, item)
+                    message = "Returned from editor"
             elif key in (c.KEY_LEFT, c.KEY_BACKSPACE, "\x7f", "\b"):
-                pane.open(pane.path.parent)
+                previous = pane.path
+                pane.open(previous.parent)
+                if previous in pane.entries:
+                    pane.index = pane.entries.index(previous)
             elif key == "g":
                 dest = ask("Open path (Esc cancels):")
                 if dest:

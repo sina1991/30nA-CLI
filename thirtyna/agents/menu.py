@@ -22,6 +22,11 @@ def run(argv):
     for flag, module in (("text", "numbered"), ("tui", "terminal"), ("gui", "window")):
         modes.add_argument("-" + flag, action="store_const", dest="view", const=module)
     args = cli.parse_args(argv)
+    if args.target and args.target[0] == "dir":
+        folder = args.target[1]
+        if folder.lower() == "root" and not Path(folder).exists():
+            folder = "/"
+        args.target = ("dir", folder)
     session = MenuSession(Path.cwd(), args.target)
     mode = args.view or "numbered"
     if mode == "window" and not os.environ.get("DISPLAY") and sys.stdin.isatty() and sys.stdout.isatty():
