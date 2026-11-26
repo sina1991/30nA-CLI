@@ -25,8 +25,8 @@ def run(argv):
     session = MenuSession(Path.cwd(), args.target)
     mode = args.view or "numbered"
     if mode == "window" and not os.environ.get("DISPLAY") and sys.stdin.isatty() and sys.stdout.isatty():
-        print("No graphical display. Opening the numbered directory menu.", file=sys.stderr)
-        mode = "numbered"
+        print("Opening the fullscreen terminal interface.", file=sys.stderr)
+        mode = "terminal"
     view = importlib.import_module("thirtyna.menus." + mode)
     try:
         view.show(session)
