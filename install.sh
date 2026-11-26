@@ -46,5 +46,5 @@ ln -s -- "$release/30na" "$release/launcher"
 mv -Tf -- "$release/launcher" "$prefix/bin/30na"
 echo "Installed $prefix/bin/30na using $python_bin."
 if [[ -z ${DISPLAY:-} ]]; then
-    echo "GUI: no DISPLAY in this session. Use a desktop or an X11-forwarded SSH session."
+    echo "Interactive SSH: -gui opens the fullscreen terminal interface."
 fi
