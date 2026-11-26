@@ -26,7 +26,7 @@ class Directory:
         items.sort(key=lambda item: (item.title.casefold(), item.title))
         if path != path.parent:
             items.insert(0, Item("..", path.parent))
-        self.title, self.items = label(path), items
+        self.path, self.title, self.items = path, label(path), items
 
 
 MENUS = {"dir": ("Directory browser", Directory)}
