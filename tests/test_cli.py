@@ -29,7 +29,7 @@ class CLITests(unittest.TestCase):
         return result.stdout.strip()
 
     def test_registry(self):
-        self.assertEqual(set(discover()), {"-calc", "-sys", "-host"})
+        self.assertEqual(set(discover()), {"-calc", "-sys", "-host", "-menu"})
 
     def test_extension(self):
         pkg = self.dir / "sample"
@@ -98,7 +98,7 @@ class CLITests(unittest.TestCase):
 
     def test_install_shell_and_reinstall(self):
         prefix = self.dir / "prefix"
-        env = dict(self.env, PREFIX=str(prefix), PATH=str(prefix / "bin") + ":" + self.env["PATH"])
+        env = dict(self.env, INSTALL_DEPS="0", PREFIX=str(prefix), PATH=str(prefix / "bin") + ":" + self.env["PATH"])
         def shell(command):
             return subprocess.check_output(["bash", "-ec", command], env=env,
                                            cwd=self.dir, text=True).strip()
