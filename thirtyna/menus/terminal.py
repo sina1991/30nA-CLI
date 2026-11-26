@@ -1,6 +1,9 @@
 """Keyboard-driven renderer shared by registered menu pages."""
 import sys
 
+from .file_screen import manage
+from .model import Directory
+
 
 def palette(c):
     styles = [c.A_BOLD, c.A_REVERSE | c.A_BOLD, c.A_DIM, c.A_BOLD]
@@ -30,6 +33,11 @@ def browse(screen, session, c):
     query = ""
     searching = False
     while not session.done:
+        if isinstance(session.page, Directory):
+            if manage(screen, session.page.path, c, (accent, active, normal, warning)) == "quit":
+                return
+            session.back()
+            continue
         height, width = screen.getmaxyx()
         compact = height < 12
         first = 2 if compact else 4
