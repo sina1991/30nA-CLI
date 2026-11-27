@@ -215,10 +215,10 @@ class Dashboard:
         if self.page == "picker":
             return "Up/Down or j/k | Enter select | Esc cancel"
         if self.page == "result":
-            return "Up/Down scroll | PgUp/PgDn | Esc back | q quit"
+            return "j/k or arrows scroll | PgUp/PgDn | Esc back | q quit"
         if self.page == "form":
-            return "Up/Down or Tab | Enter edit/run | F2 pick | Esc back"
-        return "Up/Down or j/k | Enter open | r refresh | Esc back | q quit"
+            return "j/k or Tab | Enter edit/run | f/F2 pick | Esc back"
+        return "j/k or arrows | Enter open | r refresh | Esc back | q quit"
 
     def render(self):
         s = self.screen
@@ -258,11 +258,15 @@ class Dashboard:
             elif self.page == "actions":
                 rows = [a.title for a in actions]
             else:
-                rows = [f"{f.name}: {self.buffer if self.editing and i == self.index else v}"
-                        for i, (f, v) in enumerate(zip(self.action.fields, self.values))]
+                rows = []
+                for i, (f, v) in enumerate(zip(self.action.fields, self.values)):
+                    if self.editing and i == self.index:
+                        rows.append("Edit: " + self.buffer[-max(1, w-12):] + "_")
+                    else:
+                        rows.append(f"{f.name}: {v}")
                 rows.append("[ RUN COMMAND ]")
                 if self.index < len(self.action.fields) and self.action.fields[self.index].picker:
-                    rows.append("F2: choose a saved entry")
+                    rows.append("f / F2: choose a saved entry")
                 if self.action.hint:
                     rows.append(self.action.hint)
                 try:
@@ -284,14 +288,30 @@ class Dashboard:
                       else self.accent, True)
         self.draw(h-3, 0, " STATUS | " + self.status + " | " + self.detail,
                   self.warning if self.status.startswith("ERROR") else self.active, True)
-        self.draw(h-2, 0, self.keys(), self.accent, True)
-        self.draw(h-1, 0, " Snapshot: R ready / S starting / F failed; ? unknown", self.normal, True)
+        keys = self.keys()
+        legend = " Snapshot: R ready / S starting / F failed; ? unknown"
+        if w < 55:
+            if self.editing:
+                keys = "Enter save | Esc cancel"
+            elif self.confirming:
+                keys = "y confirm | n cancel"
+            elif self.page == "result":
+                keys = "j/k scroll | Esc back"
+            elif self.page == "picker":
+                keys = "j/k | Enter select | Esc"
+            elif self.page == "form":
+                keys = "j/k Enter f:pick Esc"
+            else:
+                keys = "j/k Enter r:refresh q"
+            legend = "R/S/F snapshot (? unknown)"
+        self.draw(h-2, 0, keys, self.accent, True)
+        self.draw(h-1, 0, legend, self.normal, True)
         s.refresh()
 
     def set_result(self, args, result):
         self.snapshot.observe(args, result)
         self.status = ("OK" if result.code == 0 else "ERROR") + f" exit={result.code}"
-        self.detail = "Command completed" if result.code == 0 else "Review output"
+        self.detail = ("Review output (stderr)" if result.stderr else "Command completed") if result.code == 0 else "Review output"
         self.output = ["$ 30na " + shlex.join(args), ""]
         self.output.extend(result.stdout.splitlines())
         if result.stderr:
@@ -421,7 +441,7 @@ class Dashboard:
         h, w = self.screen.getmaxyx()
         if h < 8 or w < 24:
             return True
-        if key == "r" and self.page in ("home", "actions"):
+        if key in ("r", c.KEY_F5) and self.page in ("home", "actions"):
             self.refresh_counts()
             return True
         if self.page == "picker":
@@ -433,7 +453,7 @@ class Dashboard:
                 self.values[self.index] = self.choices[self.choice_index][0]
                 self.page = "form"
             return True
-        if self.page == "form" and key == c.KEY_F2 and self.index < len(self.action.fields):
+        if self.page == "form" and key in ("f", c.KEY_F2) and self.index < len(self.action.fields):
             if self.action.fields[self.index].picker:
                 self.open_picker()
             return True
