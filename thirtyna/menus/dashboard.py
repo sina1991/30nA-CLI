@@ -89,13 +89,14 @@ CATALOG = (
      + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM) + (Action("Local interface IPs", ("-sys", "-ip")),)),
     ("Host", (
         Action("List numbered hosts", ("-host", "-list", "-ids")),
-        Action("Register IP or domain", ("-host", "-add", "-domain", 0),
-               (Field("IP or domain"),)),
+        Action("Add / update host (SSH onboarding)", ("-host", "-add", "-domain", 0, "-onboard"),
+               (Field("IP or domain"),), confirm=True,
+               hint="Verify SSH, install pinned controller revision, inspect host; no service restart."),
         Action("Connect SSH", ("-host", "-ssh", "-domain", 0),
                (Field("Registered IP or domain", picker="host"),), interactive=True,
                hint="Uses your SSH configuration. Exit SSH to return."),
-        Action("Register and connect", ("-host", "-add", "-domain", 0, "-ssh"),
-               (Field("IP or domain"),), interactive=True),
+        Action("Register address only (offline)", ("-host", "-add", "-domain", 0),
+               (Field("IP or domain"),)),
         Action("Remove host", ("-host", "-remove", "-domain", 0),
                (Field("IP or domain", picker="host"),), confirm=True),
     )),
@@ -153,6 +154,8 @@ def invoke(args, interactive=False, timeout=15):
     argv = [sys.executable, str(LAUNCHER), *args]
     if args[:2] == ["-port", "-force"]:
         timeout = max(timeout, 60)
+    if args[:2] == ["-host", "-add"] and "-onboard" in args:
+        timeout = max(timeout, 150)
     try:
         if interactive:
             return Result(subprocess.run(argv).returncode,

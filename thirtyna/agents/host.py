@@ -20,8 +20,11 @@ def run(argv):
     endpoint.add_argument("-ip", nargs="?", const="", metavar="ADDRESS", help="IPv4, IPv6 or DNS name")
     endpoint.add_argument("-domain", dest="ip", nargs="?", const="", metavar="NAME", help="Alias for -ip")
     cli.add_argument("-ssh", action="store_true")
+    cli.add_argument("-onboard", action="store_true", help="With -add: authenticate, deploy controller revision and inspect remote")
     cli.add_argument("-ids", action="store_true", help="Numbered local/remote inventory (with -list)")
     args = cli.parse_args(argv)
+    if args.onboard and (not args.add or args.ssh or args.ids or args.ip is None):
+        raise UsageError("Use -add -ip ADDRESS -onboard")
     agent = control("ensure", bootstrap=True)
     address = None
     if args.ids:
@@ -38,6 +41,14 @@ def run(argv):
         address = host_address(args.ip or input_value("IP address:"))
         if is_domain(address) and not agent.get("domain_support"):
             raise RuntimeError("Restart Service Agent before using domain names")
+    if args.onboard:
+        if agent.get("endpoint_protocol") != 1:
+            raise RuntimeError("Restart local Service Agent before enrollment")
+        from thirtyna.onboarding import enroll
+        enroll(address)
+        number = request(agent, "register", address)["value"]
+        print(f"HOST_ID {number} REMOTE {address}")
+        return 0
     op = "list" if args.list else "add" if args.add else "remove" if args.remove else "exists"
     reply = request(agent, op, address)
     if args.list:
