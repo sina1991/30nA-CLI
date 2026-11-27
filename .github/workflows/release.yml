@@ -20,6 +20,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          if ! gh release view v1.0.0-rc.3 >/dev/null 2>&1; then
-            gh release create v1.0.0-rc.3 --target "$RELEASE_SHA" --prerelease               --title "30nA-CLI v1.0.0-rc.3" --notes-file docs/RELEASE_NOTES.md
+          if ! gh release view v1.0.0-rc.4 >/dev/null 2>&1; then
+            gh release create v1.0.0-rc.4 --target "$RELEASE_SHA" --prerelease               --title "30nA-CLI v1.0.0-rc.4" --notes-file docs/RELEASE_NOTES.md
           fi

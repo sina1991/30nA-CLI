@@ -86,7 +86,7 @@ source = home / "30na_windows"
 public = source.with_suffix(".pub")
 present = [p.exists() or p.is_symlink() for p in (source, public)]
 if not any(present):
-    print("NOTICE: no /root/30na_windows key pair; supply it securely before Host onboarding.")
+    print("NOTICE: no legacy key pair; Host enrollment can prepare a management identity.")
 elif not all(present):
     raise SystemExit("Incomplete /root/30na_windows key pair; supply both files.")
 else:

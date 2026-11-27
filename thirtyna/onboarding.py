@@ -93,6 +93,10 @@ def enroll(address, interactive=False, install=False):
         configure_login(address, key)
         if install:
             install_remote(address, key)
+            from thirtyna.ssh_backup import restore_backup
+            restore_backup(address, key)
+            if not distinct_probe(address, key, controller):
+                raise RuntimeError("SSH access failed after backup restoration")
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("SSH enrollment timed out") from exc
 
