@@ -316,7 +316,7 @@ class Supervisor:
             for attempt in range(2):
                 if name == "tunnel":
                     self.recover_tunnel()
-                if name in self.children and self.children[name][0].poll() is not None:
+                elif name in self.children and self.children[name][0].poll() is not None:
                     self.stop(name)
                 if action == "ensure":
                     if name == "tunnel":
