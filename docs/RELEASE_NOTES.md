@@ -1,25 +1,10 @@
-# 30nA-CLI v1.0.0-rc.7
+# 30nA-CLI v1.0.0-rc.8
 
-Seventh release candidate for Ubuntu terminal server management. Host addition now installs the application and Ubuntu prerequisites on the target before registration, with a downgrade guard.
+This release candidate organizes the installation, rebuild, host, tunnel and profile testing guides. Runtime commands and supported platforms are unchanged from rc.7.
 
-- Host enrollment verifies management public-key access before registration and configures ordinary SSH login from the controller.
-- Forward and Reverse use registered hosts and operator-selected TCP ports.
-- Persistent Forward runs in a dedicated local systemd service.
-- Reverse runs in a dedicated remote systemd service with a scoped SSH account on the listener.
-- Managed tunnels support start, stop, restart and delete.
-- Operator documentation includes installation, authentication, lifecycle and troubleshooting.
+- Ubuntu bootstrap follows official main. To install this exact release, check out the tag and run the bundled installer.
+- Host enrollment verifies SSH access. Use the numbered inventory when selecting a destination for a managed tunnel.
+- The profile benchmark supports VLESS, VMess, Trojan and Shadowsocks with compatible RAW/TCP, WebSocket and gRPC settings. Reports and rolling classifications are stored locally.
+- An operator-run check returned the expected UK egress IP for six VLESS/REALITY variants, including three XHTTP modes. The check used a separate script and is not a benchmark feature in this release. The operator reported intermittent connectivity on Windows. See [acceptance evidence](RELEASE_ACCEPTANCE.md).
 
-Automated Linux regression and OpenSSH integration must pass for the release commit.
-The release candidate is intended for the final fresh-VPS chain test. Full two-VPS provisioning, VLESS traffic and reboot acceptance must be recorded before promoting to v1.0.0.
-
-Legacy installations without a revision marker can be upgraded. Their previous launcher is backed up under /var/backups/30na-upgrade.* and existing release files remain available. Known revisions retain the ancestry check.
-
-When ~/30na-SSH-Backup.zip is present on the controller, adding a Host transfers the encrypted archive over verified SSH, prompts for its password on a remote TTY, validates the extracted pair, and restores shared SSH keys with backups of differing destination files. Password entry is interactive and private key contents are never printed.
-
-Loopback Reverse selects the single globally routable assigned IPv4 when Docker bridge addresses are also present, preserving loopback listeners for chained tunnels.
-
-The new 30na -test agent runs separate VLESS TCP/RAW profile measurements using an existing local Xray-core binary. It supports all or selected profiles, route labels, configurable repetition/size/timeouts and ranked CSV/JSON/Markdown reports.
-
-The profile Test Agent adds VMess, Trojan and Shadowsocks share links, compatible WebSocket/gRPC transports, protocol filtering and success-rate/download-range report fields. Existing VLESS selections and input files remain usable.
-
-Persistent test history and three rolling classifications are added. Successful profiles, reserve/evaluating profiles and unreliable profiles are recalculated from recent observations. The default 24-hour policy is configurable, with 1h/24h/7d summaries and selection by list.
+Start with the [documentation index](../README.md).
