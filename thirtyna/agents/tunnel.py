@@ -43,6 +43,7 @@ def run(argv):
     mode.add_argument("-forward", action="store_true")
     mode.add_argument("-reverse", action="store_true")
     mode.add_argument("-list", action="store_true")
+    mode.add_argument("-discover", action="store_true", help="Read-only inventory of external SSH tunnel services")
     mode.add_argument("-stop", action="store_true")
     endpoint = cli.add_mutually_exclusive_group()
     endpoint.add_argument("-ip", metavar="LOCAL_IP", help="Explicit IP assigned to this server")
@@ -60,6 +61,14 @@ def run(argv):
     cli.add_argument("-id", metavar="ID", help="Local ID 1 for start; tunnel ID for stop")
     cli.add_argument("-restore", action="store_true", help="Opt in to worker-crash restoration")
     args = cli.parse_args(argv)
+    if args.discover:
+        if any((args.localhost, args.ip is not None, args.remote is not None,
+                args.local_port is not None, args.remote_port is not None,
+                args.listen is not None, args.target is not None, args.target_port is not None,
+                args.id is not None, args.restore)) or (args.remote_id is not None and args.remote_id < 2):
+            raise UsageError("Use -discover [-remote-id ID]")
+        from thirtyna.tunnel_inventory import discover
+        return discover(args.remote_id)
     modern = any((args.localhost, args.remote is not None, args.remote_id is not None,
                   args.local_port is not None, args.remote_port is not None))
     remote_host = None

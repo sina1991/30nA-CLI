@@ -47,3 +47,5 @@ Public Port Inspection Agent: `thirtyna/agents/port.py`, `tests/test_port.py`, `
 Host onboarding: `thirtyna/onboarding.py`, `docs/HOST_ONBOARDING.md`, `tests/test_onboarding.py`. Deploy only pinned controller revision after SSH host verification. Native interactive SSH prompts only; never store passwords. No automatic privilege escalation, dependency installation, worker restart or service mutation. Preserve offline registration.
 
 Management identity: `thirtyna/ssh_identity.py` validates and copies the operator's own local `30na_windows` pair into a private directory. Never include key contents in Git, output or IPC. Explicit interactive enrollment permits ssh-copy-id of the public key only after verified remote identity; verify key-only access before installation/registration. Existing authorized keys are preserved.
+
+External SSH tunnel discovery: `thirtyna/remote_probe.py`, `thirtyna/tunnel_inventory.py`. Read-only; discovered units remain external. Never claim end-to-end readiness from a unit configuration. See `docs/REMOTE_TUNNEL_ARCHITECTURE.md` for the corrected two-VPS topology and remaining provisioning gates.

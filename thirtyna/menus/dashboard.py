@@ -106,6 +106,8 @@ CATALOG = (
     ("Tunnel", (
         Action("List tunnels", ("-tunnel", "-list")),
         tunnel("forward"), tunnel("reverse"),
+        Action("Discover external SSH tunnel services", ("-tunnel", "-discover"),
+               hint="Read-only inventory across registered hosts; no adoption or stop."),
         Action("Stop tunnel / clear failed entry", ("-tunnel", "-stop", "-id", 0),
                (Field("Tunnel ID", picker="tunnel"),), confirm=True),
     )),
@@ -157,6 +159,8 @@ def invoke(args, interactive=False, timeout=15):
     argv = [sys.executable, str(LAUNCHER), *args]
     if args[:2] == ["-port", "-force"]:
         timeout = max(timeout, 60)
+    if args[:2] == ["-tunnel", "-discover"]:
+        timeout = max(timeout, 160)
     enrollment = args[:2] == ["-host", "-add"] and "-onboard" in args
     if enrollment:
         timeout = max(timeout, 450 if interactive else 180)
