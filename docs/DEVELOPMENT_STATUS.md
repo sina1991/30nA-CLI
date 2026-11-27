@@ -10,7 +10,8 @@
 | Tunnel Startup Readiness & Failure Reporting | ادغام‌شده در PR #6؛ CI 35/35 موفق |
 | Session Restoration Policy | PR #7؛ بازیابی Opt-in محدود و تست واقعی |
 | CI Automation | ادغام‌شده در PR #5؛ CI اولیه 27/27 موفق |
-| Final Integration & Acceptance | معیارهای پذیرش در RELEASE_ACCEPTANCE؛ CI نهایی ملاک است |
+| Final Integration & Acceptance | PR #7؛ CI شاخه اصلی 47/47 موفق |
+| Domain Name Support | توسعه افزایشی؛ CI همین PR را بررسی کنید |
 
 ## شواهد تاریخی
 - PR #3: گزارش 19/19 تست موفق.

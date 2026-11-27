@@ -4,7 +4,7 @@
 
 input_value در TTY یک خط و در حالت غیرتعاملی تا EOF می‌خواند. خروجی عادی Agent با print به stdout می‌رود. Core خطای UsageError و خطاهای عملیاتی را به stderr و Exit Code تبدیل می‌کند.
 
-Host برای هر فراخوانی یک اتصال SQLite باز می‌کند. کلید اصلی جدول، متن استانداردشده IP است. تراکنش پیش از فراخوانی OpenSSH پایان می‌یابد. مسیر پایگاه داده XDG_DATA_HOME/30na/hosts.db و مسیر پیش‌فرض ~/.local/share/30na/hosts.db است.
+Host برای هر فراخوانی یک اتصال SQLite باز می‌کند. کلید اصلی جدول، متن استانداردشده IP یا Domain Name کامل است. اعتبارسنجی مشترک در thirtyna/address.py انجام می‌شود و ساختار SQLite تغییر نکرده است. تراکنش پیش از فراخوانی OpenSSH پایان می‌یابد. مسیر پایگاه داده XDG_DATA_HOME/30na/hosts.db و مسیر پیش‌فرض ~/.local/share/30na/hosts.db است.
 
 ## Tunnel Agent
 

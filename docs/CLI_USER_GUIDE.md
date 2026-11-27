@@ -38,7 +38,7 @@ clear
 30na -host -remove -ip 192.0.2.1
 ```
 
-IP نمونه را برای اتصال با IP سرور خود جایگزین کنید. IPv4 و IPv6 پذیرفته می‌شوند. با حذف مقدار پس از -ip، ورودی از ترمینال، Pipe یا فایل خوانده می‌شود. برای اتصال به Host ثبت‌شده از 30na -host -ssh -ip ADDRESS استفاده کنید. برای ثبت و سپس اتصال، 30na -host -add -ip ADDRESS -ssh را اجرا کنید. خطای ثبت از اجرای SSH جلوگیری می‌کند. خطای اتصال بعد از ثبت، Host را در فهرست نگه می‌دارد. OpenSSH تنظیمات معمول کاربر را می‌خواند و در ورودی غیرتعاملی با BatchMode=yes اجرا می‌شود.
+IP نمونه را برای اتصال با IP سرور خود جایگزین کنید. IPv4، IPv6 و Domain Name کامل (ASCII یا Punycode) پذیرفته می‌شوند. گزینه -domain نام دیگر -ip است. نام دامنه به حروف کوچک تبدیل می‌شود و نقطه انتهایی حذف می‌شود. ثبت دامنه نیاز به DNS آنلاین ندارد. اتصال و تشخیص مقصد بر عهده OpenSSH است. با حذف مقدار پس از -ip، ورودی از ترمینال، Pipe یا فایل خوانده می‌شود. برای اتصال به Host ثبت‌شده از 30na -host -ssh -ip ADDRESS استفاده کنید. برای ثبت و سپس اتصال، 30na -host -add -ip ADDRESS -ssh را اجرا کنید. خطای ثبت از اجرای SSH جلوگیری می‌کند. خطای اتصال بعد از ثبت، Host را در فهرست نگه می‌دارد. OpenSSH تنظیمات معمول کاربر را می‌خواند و در ورودی غیرتعاملی با BatchMode=yes اجرا می‌شود.
 
 ## Tunnel
 
@@ -56,3 +56,17 @@ clear
 برای بازیابی خودکار بعد از Crash شدن Tunnel Worker، گزینه `-restore` را هنگام ایجاد Tunnel اضافه کنید. بازیابی فقط برای Session آماده و در طول عمر همان Service Agent انجام می‌شود. توقف صریح، بازیابی را لغو می‌کند. قطع عادی SSH یا Restart کامل Service Agent باعث اتصال مجدد خودکار نمی‌شود.
 
 وضعیت failed در خروجی -list یک رکورد خطا است و به معنی موفقیت اتصال نیست؛ Exit Code صفر -list فقط موفق بودن عملیات فهرست را نشان می‌دهد. برای تشخیص Reasonها و ارتقا، [راهنمای عیب‌یابی](TROUBLESHOOTING_GUIDE.md) را ببینید.
+
+## اتصال با Domain Name
+
+```bash
+clear
+30na -host -add -domain ssh.example.test
+30na -host -ssh -domain ssh.example.test
+30na -tunnel -forward -domain ssh.example.test -listen 5555 -target 127.0.0.1 -target-port 443
+30na -tunnel -reverse -domain ssh.example.test -listen 5556 -target 127.0.0.1 -target-port 443 -restore
+30na -tunnel -list
+30na -host -remove -domain ssh.example.test
+```
+
+دامنه نمونه را با دامنه سرور مجاز خود جایگزین کنید. ثبت دامنه، IPهای حاصل از DNS را جداگانه مجاز نمی‌کند و برعکس. User و Port و کلید SSH از تنظیمات OpenSSH خوانده می‌شوند؛ عبارت user@domain را به‌عنوان مقدار -domain وارد نکنید. گزینه -target همچنان IP عددی می‌پذیرد. Listenerهای Tunnel Agent همچنان Loopback هستند. برای استفاده در Systemd و تفاوت Listener عمومی، [راهنمای اتصال دامنه](DOMAIN_SSH_GUIDE.md) را بخوانید. پیش از استفاده از قابلیت جدید Service Agent قدیمی را مطابق راهنمای نصب متوقف و نسخه جدید را نصب کنید.

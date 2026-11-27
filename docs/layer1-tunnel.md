@@ -14,7 +14,7 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-Numeric IPv4/IPv6 addresses and ports 1–65535 are required. The SSH host must be registered. Forward requests local loopback and Reverse requests remote loopback. A remote sshd must enforce GatewayPorts=no; its policy can override requested binding. No dynamic forwarding.
+The SSH host must be a registered numeric IPv4/IPv6 address or ASCII fully qualified DNS name; -domain is an alias for -ip. The target must remain a numeric IPv4/IPv6 address and ports must be 1–65535. Host authorization and recovery use the canonical registered name, not a resolved address. OpenSSH resolves the name at connection time. Existing listener policy is unchanged. Forward requests local loopback and Reverse requests remote loopback. A remote sshd must enforce GatewayPorts=no; its policy can override requested binding. No dynamic forwarding.
 
 ## Readiness and failures
 
