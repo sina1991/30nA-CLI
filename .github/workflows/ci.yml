@@ -18,14 +18,19 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
+      - name: Install documented Ubuntu prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3 python3-tk libpython3-stdlib openssh-client nano ncurses-base xauth
+          /usr/bin/python3 -c 'import sqlite3, curses, tkinter, tkinter.ttk'
       - name: Linux and Python version
         run: |
           uname -a
-          python3 --version
+          /usr/bin/python3 --version
           test -x ./30na
       - name: Regression and integration
         env:
           PYTHONDONTWRITEBYTECODE: "1"
-        run: python3 -m unittest discover -s tests -v
+        run: /usr/bin/python3 -m unittest discover -s tests -v
       - name: Verify tracked files unchanged
         run: git diff --exit-code HEAD --
