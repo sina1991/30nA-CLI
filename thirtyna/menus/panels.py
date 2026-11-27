@@ -7,7 +7,7 @@ HELP = {
     "Calculator": "Decimal arithmetic. Choose an operation and enter two numbers.",
     "System": "Read Linux hostname, OS, kernel, uptime, CPU, RAM, disk and assigned interface IPs.",
     "Host": "Register IP/DNS, list, remove or open interactive SSH. f selects a saved host.",
-    "Tunnel": "Forward/reverse SSH. Register host first. f opens choices on every field.",
+    "Tunnel": "Local ID 1 / numbered remote. Forward listens locally; reverse listens remotely. f selects endpoints and ports.",
     "Files": "Browse, copy, move and edit files in the two-pane manager.",
     "Help": "Open exact CLI help for any public agent.",
     "Ports": "Inspect local TCP/UDP ports, sockets, process owners and observed systemd units. Emergency release requires exact owner and confirmation.",
@@ -15,7 +15,11 @@ HELP = {
 }
 
 FIELD_HELP = {
-    "host": "f: registered SSH hosts; Enter: type a value.",
+    "host": "f: numbered SSH hosts; Enter: type a value.",
+    "local": "f: Local ID 1 or assigned interface IP. Explicit IP may expose a forward listener.",
+    "remote": "f: saved remote ID or enter an IP/domain. Direct address is registered.",
+    "local-port": "Local endpoint port; listener in Forward, service in Reverse.",
+    "remote-port": "Remote endpoint port; service in Forward, listener in Reverse.",
     "listen": "f: common listen ports (not checked for availability).",
     "target": "f: loopback, actual local interface IPs or custom IP. Forward target is remote; reverse target is local.",
     "target-port": "f: common destination ports; Enter: type any valid port.",
@@ -51,7 +55,7 @@ def suggestions(kind, current="", local_ips=()):
         return [("tcp", "TCP"), ("udp", "UDP")]
     if kind == "restore":
         pairs = [("no", "No - default"), ("yes", "Yes - worker crash recovery")]
-    elif kind in ("listen", "target-port"):
+    elif kind in ("listen", "target-port", "local-port", "remote-port"):
         ports = ("5555", "8080", "8443", "443", "80", "22", "3306", "5432")
         pairs = [(p, p + " (suggestion)") for p in ports]
     elif kind == "target":
