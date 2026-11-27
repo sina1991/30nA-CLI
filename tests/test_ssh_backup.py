@@ -59,6 +59,31 @@ class BackupTests(unittest.TestCase):
                 backup_peer.restore(root, home)
             self.assertEqual(old.read_bytes(), b"existing key fixture")
 
+    def test_failed_key_write_restores_previous_files(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            home = root / "home"
+            home.mkdir()
+            self.generate(root / "30na_windows")
+            old = home / "30na_windows"
+            old.write_bytes(b"old key fixture")
+            real_write = backup_peer.write_file
+            writes = 0
+
+            def fail_once(path, content, mode):
+                nonlocal writes
+                writes += 1
+                if writes == 3:
+                    raise OSError("simulated write failure")
+                return real_write(path, content, mode)
+
+            with patch("thirtyna.backup_peer.write_file", side_effect=fail_once):
+                with self.assertRaisesRegex(OSError, "simulated"):
+                    backup_peer.restore(root, home)
+            self.assertEqual(old.read_bytes(), b"old key fixture")
+            self.assertFalse((home / "30na_windows.pub").exists())
+            self.assertFalse((home / ".ssh/id_ed25519").exists())
+
     def test_receiver_verifies_transfer_before_replacement(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

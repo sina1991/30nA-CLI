@@ -77,6 +77,17 @@ def restore(stage, home):
                 regular(path)
         if os.path.lexists(authorized):
             regular(authorized)
+        previous = authorized.read_bytes() if authorized.exists() else b""
+        normalized = b" ".join(expected[:2])
+        present = any(line.strip().startswith(normalized + b" ") or line.strip() == normalized
+                      for line in previous.splitlines())
+        if not present:
+            previous = previous.rstrip(b"\n") + b"\n" + normalized + b"\n"
+        targets.append((authorized, previous, 0o600))
+        originals = {
+            path: (path.read_bytes(), stat.S_IMODE(path.stat().st_mode)) if path.exists() else None
+            for path, _, _ in targets
+        }
         backup = None
         for path, content, mode in targets:
             if path.exists() and path.read_bytes() != content:
@@ -88,14 +99,19 @@ def restore(stage, home):
                 destination.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
                 shutil.copyfile(path, destination)
                 destination.chmod(0o600)
-            write_file(path, content, mode)
-        previous = authorized.read_bytes() if authorized.exists() else b""
-        normalized = b" ".join(expected[:2])
-        present = any(line.strip().startswith(normalized + b" ") or line.strip() == normalized
-                      for line in previous.splitlines())
-        if not present:
-            previous = previous.rstrip(b"\n") + b"\n" + normalized + b"\n"
-        write_file(authorized, previous, 0o600)
+        written = []
+        try:
+            for path, content, mode in targets:
+                written.append(path)
+                write_file(path, content, mode)
+        except (OSError, KeyboardInterrupt):
+            for path in reversed(written):
+                original = originals[path]
+                if original is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    write_file(path, *original)
+            raise
         if backup is not None:
             print("PREVIOUS_KEYS_BACKUP", backup)
     print("SSH_BACKUP_RESTORED")
