@@ -43,3 +43,7 @@ PR #12: 105/105 passed on tested merge tree. External tunnel inventory is a sepa
 ## Two-VPS reverse
 
 PR #13 discovery: 111/111 on tested merge tree. New numbered reverse dispatches to the remote systemd engine; exact final PR CI required. Production two-VPS acceptance remains pending.
+
+## Bootstrap installer
+
+Automated Ubuntu prerequisites, clean main checkout/update and root SSH/key preparation; dependency-free peer deployment remains unchanged. CI required for exact head.

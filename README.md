@@ -6,12 +6,17 @@ Tunnel Agent: `30na -tunnel -help` (OpenSSH Forward/Reverse, confirmed readiness
 
 ## نصب از GitHub
 
+برای نصب یا به‌روزرسانی کامل روی Ubuntu با کاربر root، تنها اسکریپت نصاب را دریافت و اجرا کنید (curl یا wget برای دریافت اولیه لازم است).
+
 ```bash
 clear
-git clone https://github.com/sina1991/30nA-CLI.git
-cd 30nA-CLI
-sudo ./install.sh
+installer=$(mktemp)
+curl -fsSL https://raw.githubusercontent.com/sina1991/30nA-CLI/main/install.sh -o "$installer" &&
+bash "$installer" --bootstrap
+rm -f -- "$installer"
 ```
+
+نصاب Git، پیش‌نیازها، checkout تمیز main، SSH و آماده‌سازی کلیدهای موجود را مدیریت می‌کند. بدون کلید هم نصب برنامه ممکن است؛ برای Onboarding جفت‌کلید را امن منتقل کنید. هیچ Upgrade سراسری OS یا Restart عمدی سرویس فعال انجام نمی‌شود. برای نصب از checkout موجود همچنان ./install.sh قابل استفاده است.
 
 ```bash
 clear
