@@ -30,7 +30,7 @@ class CLITests(unittest.TestCase):
         return result.stdout.strip()
 
     def test_registry(self):
-        self.assertEqual(set(discover()), {"-calc", "-sys", "-host", "-menu", "-tunnel", "-service", "-port"})
+        self.assertEqual(set(discover()), {"-calc", "-sys", "-host", "-menu", "-tunnel", "-service", "-port", "-test"})
 
     def test_extension(self):
         pkg = self.dir / "sample"

@@ -53,3 +53,5 @@ External SSH tunnel discovery: `thirtyna/remote_probe.py`, `thirtyna/tunnel_inve
 Two-VPS reverse engine: `thirtyna/two_vps.py`, `thirtyna/reverse_peer.py`, `tests/test_two_vps.py`. New reverse starts SSH on Remote, listens on Local, uses per-tunnel private key on Remote and scoped local account. Persist intent before mutation; stop only owned resources. Legacy worker and external services remain unchanged.
 
 Installer bootstrap (`install.sh --bootstrap`) uses clean official main checkout only, installs missing Ubuntu prerequisites, preserves existing active SSH/socket activation, validates local root key pair if present. `INSTALL_DEPS=0` must not run apt, systemctl or modify keys.
+
+VLESS Test Agent uses thirtyna/agents/test.py, thirtyna/vless_test.py and tests/test_vless_test.py. Preserve private input/configuration handling, owned-client cleanup, SOCKS-only curl requests and credential-free summary reports. Host probes are outside the first Test Agent scope.
