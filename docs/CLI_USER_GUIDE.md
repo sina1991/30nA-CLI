@@ -39,3 +39,16 @@ clear
 ```
 
 IP نمونه را برای اتصال با IP سرور خود جایگزین کنید. IPv4 و IPv6 پذیرفته می‌شوند. با حذف مقدار پس از -ip، ورودی از ترمینال، Pipe یا فایل خوانده می‌شود. برای اتصال به Host ثبت‌شده از 30na -host -ssh -ip ADDRESS استفاده کنید. برای ثبت و سپس اتصال، 30na -host -add -ip ADDRESS -ssh را اجرا کنید. خطای ثبت از اجرای SSH جلوگیری می‌کند. خطای اتصال بعد از ثبت، Host را در فهرست نگه می‌دارد. OpenSSH تنظیمات معمول کاربر را می‌خواند و در ورودی غیرتعاملی با BatchMode=yes اجرا می‌شود.
+
+## Tunnel
+
+```bash
+clear
+30na -tunnel -help
+30na -tunnel -forward -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80
+30na -tunnel -reverse -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80
+30na -tunnel -list
+30na -tunnel -stop -id TUNNEL_ID
+```
+
+آدرس `-ip` باید پیش‌تر در Host Agent ثبت شده باشد. در Forward پورت روی Loopback محلی و در Reverse روی Loopback میزبان SSH باز می‌شود. احراز هویت SSH باید غیرتعاملی باشد. خروجی `state=starting` به‌معنی برقراری قطعی Tunnel نیست. جزئیات در [مستند معماری Tunnel](layer1-tunnel.md) آمده است.

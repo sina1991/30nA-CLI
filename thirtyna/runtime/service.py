@@ -13,9 +13,9 @@ import subprocess
 import sys
 
 from thirtyna.core import UsageError
-from thirtyna.runtime import host, ports
+from thirtyna.runtime import host, ports, tunnel
 
-REGISTRY = {"host": host.handle}
+REGISTRY = {"host": host.handle, "tunnel": tunnel.handle}
 MODULE = "thirtyna.runtime.service"
 
 
@@ -148,32 +148,37 @@ def worker(listener, lifetime):
     with lifetime.makefile("rb") as config:
         name, key = read(config)
     last = None
-    while True:
-        ready, _, _ = select.select([lifetime, listener], [], [])
-        if lifetime in ready:
-            return
-        conn, _ = listener.accept()
-        with conn, conn.makefile("rwb", buffering=0) as stream:
-            conn.settimeout(1)
-            try:
-                nonce, payload = authenticate(stream, key)
-                op, ip, caller = payload
-                result = {"pid": os.getpid()}
-                if op == "ready":
-                    result["last"] = last
-                else:
-                    result["value"] = REGISTRY[name](folder(), op, ip)
-                    last = dict(op=op, requester=caller, processor=os.getpid())
-            except UsageError as exc:
-                result = {"usage": str(exc)}
-            except RuntimeError as exc:
-                result = {"error": str(exc)}
-            except (ValueError, TypeError, OSError):
-                continue
-            try:
-                send(stream, [result, signature(key, nonce, ["result", payload, result])])
-            except OSError:
-                pass
+    try:
+        while True:
+            ready, _, _ = select.select([lifetime, listener], [], [])
+            if lifetime in ready:
+                return
+            conn, _ = listener.accept()
+            with conn, conn.makefile("rwb", buffering=0) as stream:
+                conn.settimeout(1)
+                try:
+                    nonce, payload = authenticate(stream, key)
+                    op, ip, caller = payload
+                    result = {"pid": os.getpid()}
+                    if op == "ready":
+                        result["last"] = last
+                    else:
+                        result["value"] = REGISTRY[name](folder(), op, ip)
+                        last = dict(op=op, requester=caller, processor=os.getpid())
+                except UsageError as exc:
+                    result = {"usage": str(exc)}
+                except RuntimeError as exc:
+                    result = {"error": str(exc)}
+                except (ValueError, TypeError, OSError):
+                    continue
+                try:
+                    send(stream, [result, signature(key, nonce, ["result", payload, result])])
+                except OSError:
+                    pass
+
+    finally:
+        if name == "tunnel":
+            tunnel.cleanup()
 
 
 class Supervisor:
