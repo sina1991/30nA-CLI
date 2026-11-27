@@ -39,3 +39,5 @@ clear
 روی Remote واحد 30na-tunnel-ID.service با Restart=always و Host Key صریح Local ساخته و فعال می‌شود. Listener روی Local Port باید به حساب اختصاصی تعلق داشته باشد تا ready گزارش شود؛ این تأیید انتقال end-to-end به Xray نیست. Stop فقط Unit و فایل‌ها و حساب همان ID را پاک می‌کند. شکست cleanup باعث حفظ رکورد می‌شود. Reverse جدید مستقل از عمر Worker است و -restore نمی‌گیرد؛ Forward قبلی بدون تغییر باقی می‌ماند. فهرست ترکیبی است و Legacy Reverse به‌صورت خودکار تبدیل نمی‌شود.
 
 آزمون‌های orchestration با منابع شبیه‌سازی‌شده، parser واقعی sshd و انتقال TCP با OpenSSH واقعی loopback انجام می‌شوند. اجرای کامل root provisioning روی دو VPS واقعی و سلامت VPN کاربر نیاز به پذیرش عملیاتی دارند. هیچ Tunnel خارجی به‌طور خودکار Adopt نمی‌شود.
+
+اگر فایل‌های sshd_config.d در سیاست مؤثر sshd خوانده نشوند، موتور فقط همان Match User محدود به شناسه Reverse را به انتهای sshd_config اضافه می‌کند؛ هیچ wildcard یا تنظیم عمومی جدیدی فعال نمی‌شود. مالکیت و مجوز فایل حفظ می‌شود و جایگزینی اتمی است. سیاست مؤثر پیش از Reload اعتبارسنجی می‌شود. هنگام Stop یا rollback فقط بلوک دقیق همان شناسه حذف می‌شود؛ در صورت تغییر دستی بلوک، cleanup متوقف و رکورد حفظ می‌شود.

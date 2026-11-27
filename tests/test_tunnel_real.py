@@ -369,3 +369,45 @@ Host 127.0.0.1 ssh.example.test
                     peer.sendall(b"ok")
                     self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
             self.cli("-tunnel", "-stop", "-id", token)
+
+
+    def test_reverse_missing_include_real_sshd_effective_policy(self):
+        from unittest.mock import patch
+        from thirtyna import two_vps as engine
+        config = self.root / "cloud_sshd_config"
+        directory = self.root / "dropins"
+        directory.mkdir()
+        original = ((self.root / "sshd_config").read_text()
+                    + "\n# Include /etc/ssh/sshd_config.d/*.conf\n"
+                    + "Match User unrelated\n    PermitTTY no\n").encode()
+        config.write_bytes(original)
+        row = dict(id="a"*24, local="127.0.0.1", local_port=5555, gateway="127.0.0.1")
+        sshd = shutil.which("sshd") or "/usr/sbin/sshd"
+        def run(args):
+            if args[0] != engine.SSHD:
+                self.assertEqual(args, ["systemctl", "reload", "ssh.service"])
+                return ""
+            result = subprocess.run(["sudo", "-n", sshd, "-f", str(config), *args[1:]],
+                                    capture_output=True, text=True, timeout=5)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return result.stdout.strip()
+        with patch.object(engine, "SSHD_CONFIG", config), patch.object(engine, "CONFIG", directory), \
+             patch.object(engine, "command", side_effect=run):
+            engine.config_path(row).write_text(engine.policy(row))
+            before = run([engine.SSHD, "-T", "-C", "user=root,host=peer,addr=127.0.0.1,laddr=127.0.0.1,lport=22"])
+            self.assertIn("authenticationmethods any", engine.effective_policy(row, "127.0.0.1"))
+            self.assertNotIn("gatewayports clientspecified", engine.effective_policy(row, "127.0.0.1"))
+            engine.ensure_policy_loaded(row, "127.0.0.1", lambda: None)
+            self.assertTrue(row["main_policy_attempt"])
+            effective = engine.effective_policy(row, "127.0.0.1")
+            for setting in ("authenticationmethods publickey", "allowtcpforwarding remote",
+                            "gatewayports clientspecified", "maxsessions 0",
+                            "permitlisten 127.0.0.1:5555", "permitopen none",
+                            f"authorizedkeysfile {engine.keys_path(row)}"):
+                self.assertIn(setting, effective)
+            run([engine.SSHD, "-t"])
+            after = run([engine.SSHD, "-T", "-C", "user=root,host=peer,addr=127.0.0.1,laddr=127.0.0.1,lport=22"])
+            self.assertEqual(before, after)
+            engine.remove_main_policy(row)
+            self.assertEqual(config.read_bytes(), original)
+            run([engine.SSHD, "-t"])
