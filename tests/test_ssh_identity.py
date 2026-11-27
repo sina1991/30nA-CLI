@@ -63,3 +63,12 @@ class IdentityTests(unittest.TestCase):
         with self.assertRaises(OSError):
             import_identity(self.home)
         self.assertEqual(key.read_bytes(), b"existing")
+
+    def test_fresh_controller_creates_one_reusable_management_key(self):
+        self.source.unlink()
+        self.source.with_suffix(".pub").unlink()
+        key = import_identity(self.home, create=True)
+        self.assertEqual(existing_identity(self.home), key)
+        original = key.read_bytes()
+        self.assertEqual(import_identity(self.home, create=True).read_bytes(), original)
+        self.assertFalse(self.source.exists())

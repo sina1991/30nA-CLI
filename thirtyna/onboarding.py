@@ -87,7 +87,7 @@ def enroll(address, interactive=False):
     if not re.fullmatch(rb"[0-9a-f]{32}", machine):
         raise RuntimeError("Local machine identity unavailable")
     controller = hashlib.sha256(machine).hexdigest()
-    key = import_identity()
+    key = import_identity(create=True)
     try:
         authenticate(address, key, controller, interactive)
         configure_login(address, key)
