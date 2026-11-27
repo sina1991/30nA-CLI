@@ -23,7 +23,7 @@ Read this file first. Do not reload old chat transcripts or the entire repositor
 - Public agents expose SWITCH, NAME, run(argv); discovery belongs to core.
 - Host Agent alone accesses its SQLite storage. Shared endpoint validation is in thirtyna/address.py; DNS registration never implicitly authorizes resolved IPs. Tunnel authorization goes through authenticated Host IPC. Local ID 1 is reserved; remote IDs persist and never recycle. Read `thirtyna/endpoints.py` for endpoint mapping.
 - Service Agent supervises separate workers; shared Port Agent allocates worker control sockets. OpenSSH owns forwarding sockets; runtime allocator and Tunnel never kill a foreign listener. Explicit public Port Agent emergency release follows its separate owner-verification policy.
-- Default forward/reverse listeners request loopback binding. New endpoint contract permits explicit assigned local IP binding for Forward; warn about exposure. No readiness claim based only on a live PID. No credentials or private keys in source, logs or commits.
+- Default forward/reverse listeners request loopback binding. New numbered endpoint contract permits explicit assigned local IP binding for Forward and two-VPS Reverse; warn about exposure. No readiness claim based only on a live PID. No credentials or private keys in source, logs or commits.
 - Preserve Linux isolation, XDG paths, error exit codes, noninteractive SSH and cleanup. Recovery is opt-in, RAM-only, bounded and reauthorizes Host. Explicit stop discards intent. Never infer readiness from process liveness or bypass Host IPC. Do not introduce unrelated dependencies or change unrelated agents.
 
 ## Validation
@@ -49,3 +49,5 @@ Host onboarding: `thirtyna/onboarding.py`, `docs/HOST_ONBOARDING.md`, `tests/tes
 Management identity: `thirtyna/ssh_identity.py` validates and copies the operator's own local `30na_windows` pair into a private directory. Never include key contents in Git, output or IPC. Explicit interactive enrollment permits ssh-copy-id of the public key only after verified remote identity; verify key-only access before installation/registration. Existing authorized keys are preserved.
 
 External SSH tunnel discovery: `thirtyna/remote_probe.py`, `thirtyna/tunnel_inventory.py`. Read-only; discovered units remain external. Never claim end-to-end readiness from a unit configuration. See `docs/REMOTE_TUNNEL_ARCHITECTURE.md` for the corrected two-VPS topology and remaining provisioning gates.
+
+Two-VPS reverse engine: `thirtyna/two_vps.py`, `thirtyna/reverse_peer.py`, `tests/test_two_vps.py`. New reverse starts SSH on Remote, listens on Local, uses per-tunnel private key on Remote and scoped local account. Persist intent before mutation; stop only owned resources. Legacy worker and external services remain unchanged.

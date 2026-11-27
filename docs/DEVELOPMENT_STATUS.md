@@ -39,3 +39,7 @@ Authenticated pinned deployment and observed remote inventory with key or native
 ## Remote topology
 
 PR #12: 105/105 passed on tested merge tree. External tunnel inventory is a separate read-only phase; new two-VPS provisioning remains pending. See [design](REMOTE_TUNNEL_ARCHITECTURE.md).
+
+## Two-VPS reverse
+
+PR #13 discovery: 111/111 on tested merge tree. New numbered reverse dispatches to the remote systemd engine; exact final PR CI required. Production two-VPS acceptance remains pending.

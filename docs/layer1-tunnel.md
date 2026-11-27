@@ -15,7 +15,7 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-Local is always ID 1; the default local IP is loopback. Explicit -ip must be assigned to the local server (or loopback); Forward binds to it, so network exposure requires operator review. Reverse requests remote loopback and targets the chosen local IP. Forward targets remote IPv4 loopback. Port names refer to fixed endpoints, not the listener/target role. Remote address is canonicalized and explicitly registered via authenticated Host IPC; a numbered remote must already exist. Worker verifies the ID/address mapping and registration again, including recovery. Legacy target syntax remains accepted but is hidden in new help; its original loopback policy is unchanged. Remote sshd GatewayPorts policy can override reverse binding. No dynamic forwarding. The new endpoint contract requires endpoint_protocol=1; restart the previous supervisor before upgrading.
+Local is always ID 1. For new numbered endpoint syntax, both modes listen on Local Port and target Remote loopback:Remote Port. Forward retains the worker; Reverse launches its dedicated systemd unit on Remote with a scoped local SSH account and a key generated on Remote. Default bind is loopback; explicit assigned IPv4 exposes the chosen interface. Reverse requires root, enrolled Remote, reachable Local IPv4 and SSH port 22. The legacy -target syntax and already-running worker sessions are unchanged and may use the historical opposite topology. See [two-VPS architecture](REMOTE_TUNNEL_ARCHITECTURE.md).
 
 ## Readiness and failures
 
@@ -27,7 +27,7 @@ The CLI returns id, pid and state=starting or state=ready; initial errors may re
 
 The worker terminates only its own SSH children, not foreign listeners. Parent-death signalling handles worker crashes; normal shutdown removes control directories and closes logs. The supervisor owns a separate private directory for each Tunnel worker and removes that exact directory on worker exit. A supervisor SIGKILL can leave its private temporary directory, but stale sockets are never reused.
 
-By default, tunnels are not restored. Add the explicit `-restore` switch to a forward or reverse start to opt in:
+Worker-owned tunnels are not restored by default. Add `-restore` to Forward or legacy Reverse; the new two-VPS Reverse instead persists as a systemd unit:
 
 ```bash
 clear

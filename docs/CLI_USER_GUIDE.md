@@ -55,9 +55,9 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-Local Port و Remote Port با تغییر جهت ثابت می‌مانند. Forward: روی Local Port گوش می‌دهد و به 127.0.0.1:Remote Port از سمت سرور SSH می‌رود. Reverse: روی Remote Port در سرور SSH گوش می‌دهد و به Local IP:Local Port می‌رود. پیش‌فرض Local IP برابر 127.0.0.1 است. با -ip می‌توان IP عددی متعلق به همین سرور را صریحاً انتخاب کرد؛ در Forward این انتخاب Listener را روی همان رابط باز می‌کند و ممکن است آن را در شبکه قابل دسترسی کند، پس Firewall را متناسب تنظیم کنید. Remote Listener در Reverse درخواست Loopback دارد؛ GatewayPorts روی sshd می‌تواند آن را تغییر دهد.
+در هر دو حالت Local Port پورت ورودی و Remote Port پورت سرویس مقصد است. در Forward اتصال SSH از Local آغاز می‌شود؛ در Reverse از Remote. پیش‌فرض Bind برابر Loopback است؛ با -ip آدرس IPv4 متعلق به Local را صریحاً انتخاب کنید تا روی همان رابط شنونده ایجاد شود. Reverse جدید به Host Onboarding موفق، دسترسی root و SSH روی پورت 22 سرور Local نیاز دارد. [جزئیات](REMOTE_TUNNEL_ARCHITECTURE.md).
 
-با -remote-ip یا -remote-domain آدرس Remote مشخص می‌شود و Host Agent آن را در صورت نیاز ثبت می‌کند. با -remote-id فقط Host ثبت‌شده انتخاب می‌شود. هر دو روش به تنظیم صحیح User، SSH Port، کلید و Host Key معتبر نیاز دارند. رمز عبور یا کلید در برنامه ذخیره نمی‌شود. سوییچ قدیمی -listen در قرارداد جدید نام دیگر Local Port است، نه Listener در هر دو جهت. سوییچ‌های Target قدیمی فقط برای سازگاری اسکریپت‌ها حفظ شده‌اند و در منو و Help جدید نمایش داده نمی‌شوند. گزینه اختیاری -restore همچنان برای بازیابی محدود Worker باقی است.
+با -remote-ip یا -remote-domain آدرس Remote مشخص می‌شود و Host Agent آن را در صورت نیاز ثبت می‌کند. با -remote-id فقط Host ثبت‌شده انتخاب می‌شود. هر دو روش به تنظیم صحیح User، SSH Port، کلید و Host Key معتبر نیاز دارند. رمز عبور یا کلید در برنامه ذخیره نمی‌شود. سوییچ قدیمی -listen در قرارداد جدید نام دیگر Local Port است، نه Listener در هر دو جهت. سوییچ‌های Target قدیمی فقط برای سازگاری اسکریپت‌ها حفظ شده‌اند و در منو و Help جدید نمایش داده نمی‌شوند. گزینه -restore فقط برای Forward و Reverse قدیمی باقی است؛ Reverse جدید با Systemd پایدار می‌ماند.
 
 وضعیت ready تأیید Forwarding توسط OpenSSH است، نه تضمین دسترسی به سرویس مقصد. برای Stop، از Tunnel ID خروجی استفاده کنید، نه Host ID. جزئیات: [معماری Tunnel](layer1-tunnel.md).
 

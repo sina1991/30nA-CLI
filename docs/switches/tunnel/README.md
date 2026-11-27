@@ -13,4 +13,4 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-Forward listens on local port and targets remote loopback; Reverse listens on remote port and targets local service. Default local IP is loopback; explicit -ip binds Forward to an assigned interface and can expose it on the network. Reverse listener policy depends on remote sshd. CLI requires noninteractive SSH and verified host identity according to SSH config. Optional -restore is bounded worker-crash restoration, not restart/reboot recovery. Old target syntax is compatibility-only. See [architecture and lifecycle](../../layer1-tunnel.md).
+Both new modes listen on Local Port and target remote loopback:Remote Port. Forward starts SSH locally; Reverse starts SSH on Remote via a dedicated systemd service and scoped account. Default bind loopback; explicit assigned local IPv4 exposes that interface. Reverse requires root, completed Host onboarding and Local SSH port 22. Legacy target syntax is compatibility-only. [Two-VPS architecture](../../REMOTE_TUNNEL_ARCHITECTURE.md).
