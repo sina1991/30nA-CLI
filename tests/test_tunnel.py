@@ -101,10 +101,11 @@ class TunnelTests(unittest.TestCase):
     def register(self):
         self.cli("-host", "-add", "-ip", self.host)
 
-    def start(self, mode="forward", listen=None):
+    def start(self, mode="forward", listen=None, restore=False):
         listen = listen or unused_port()
         output = self.cli("-tunnel", "-" + mode, "-ip", self.host, "-listen", str(listen),
-                          "-target", "127.0.0.1", "-target-port", "80").stdout
+                          "-target", "127.0.0.1", "-target-port", "80",
+                          *(["-restore"] if restore else [])).stdout
         token = output.split()[0].split("=")[1]
         self.assertRegex(output, r"state=(starting|ready)")
         return self.wait_state(token, "ready")
@@ -132,6 +133,8 @@ class TunnelTests(unittest.TestCase):
         self.cli("-tunnel", "-forward", code=2)
         self.cli("-tunnel", "-list", "-ip", self.host, code=2)
         self.cli("-tunnel", "-stop", code=2)
+        self.cli("-tunnel", "-list", "-restore", code=2)
+        self.cli("-tunnel", "-stop", "-id", "missing", "-restore", code=2)
         self.cli("-tunnel", "-forward", "-ip", self.host, "-listen", "0",
                  "-target", "127.0.0.1", "-target-port", "80", code=2)
 
@@ -285,6 +288,146 @@ class TunnelTests(unittest.TestCase):
         self.assertEqual(failed["reason"], "startup_timeout")
         self.assertFalse(running(failed["pid"]))
 
+
+    def worker_pid(self):
+        from unittest.mock import patch
+        with patch.dict(os.environ, self.env):
+            return control("status", "tunnel")["pid"]
+
+    def master_count(self):
+        return sum("-M" in json.loads(line)["args"] for line in
+                   (self.root / "ssh_calls").read_text().splitlines())
+
+    def test_opt_in_restore_without_cli_trigger(self):
+        self.register()
+        first = self.start(restore=True)
+        self.assertTrue(first["restore"])
+        worker = self.worker_pid()
+        calls = [json.loads(line)["args"] for line in (self.root / "ssh_calls").read_text().splitlines()]
+        master = next(args for args in calls if "-M" in args)
+        old_directory = Path(master[master.index("-S") + 1]).parent.parent
+        os.kill(worker, signal.SIGKILL)
+        deadline = time.monotonic() + 8
+        # Observe the mock process log only; no CLI or supervisor request triggers recovery.
+        while time.monotonic() < deadline and self.master_count() < 2:
+            time.sleep(0.05)
+        self.assertEqual(self.master_count(), 2)
+        restored = self.wait_state(first["id"], "ready")
+        self.assertNotEqual(first["pid"], restored["pid"])
+        self.assertNotEqual(worker, self.worker_pid())
+        self.assertFalse(running(first["pid"]))
+        self.assertFalse(old_directory.exists())
+        self.cli("-tunnel", "-stop", "-id", first["id"])
+
+    def test_explicit_stop_discards_restore_intent(self):
+        self.register()
+        first = self.start(restore=True)
+        self.cli("-tunnel", "-stop", "-id", first["id"])
+        os.kill(self.worker_pid(), signal.SIGKILL)
+        time.sleep(1)
+        self.assertEqual(self.master_count(), 1)
+        self.assertEqual(self.tunnels(), [])
+
+    def test_worker_stop_discards_all_restore_intents(self):
+        self.register()
+        self.start(restore=True)
+        from unittest.mock import patch
+        with patch.dict(os.environ, self.env):
+            control("stop", "tunnel")
+        self.assertEqual(self.tunnels(), [])
+        self.assertEqual(self.master_count(), 1)
+
+    def test_removed_host_blocks_restore(self):
+        self.register()
+        first = self.start(restore=True)
+        self.cli("-host", "-remove", "-ip", self.host)
+        os.kill(self.worker_pid(), signal.SIGKILL)
+        failed = self.wait_state(first["id"], "failed", timeout=8)
+        self.assertEqual(failed["reason"], "host_not_registered")
+        self.assertEqual(self.master_count(), 1)
+
+    def test_parallel_starts_no_supervisor_lock_inversion(self):
+        self.register()
+        first, second = unused_port(), unused_port()
+        while second == first:
+            second = unused_port()
+        procs = [subprocess.Popen([CLI, "-tunnel", "-forward", "-ip", self.host,
+                                   "-listen", str(port), "-target", "127.0.0.1",
+                                   "-target-port", "80"], cwd=ROOT, env=self.env,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                 for port in (first, second)]
+        for proc in procs:
+            self.addCleanup(lambda p=proc: p.kill() if p.poll() is None else None)
+            out, err = proc.communicate(timeout=10)
+            self.assertEqual(proc.returncode, 0, err)
+            self.wait_state(out.split()[0].split("=")[1], "ready")
+        self.assertEqual(len(self.tunnels()), 2)
+
+    def test_host_worker_replaced_before_new_tunnel(self):
+        self.register()
+        self.start()
+        from unittest.mock import patch
+        with patch.dict(os.environ, self.env):
+            os.kill(control("status", "host")["pid"], signal.SIGKILL)
+        time.sleep(0.2)
+        self.start()
+        self.assertEqual(len(self.tunnels()), 2)
+
+    def test_opted_in_ssh_disconnect_does_not_retry(self):
+        self.register()
+        first = self.start(restore=True)
+        os.kill(first["pid"], signal.SIGKILL)
+        self.wait_state(first["id"], "failed")
+        os.kill(self.worker_pid(), signal.SIGKILL)
+        time.sleep(1)
+        self.assertEqual(self.master_count(), 1)
+        self.assertEqual(self.tunnels(), [])
+
+    def test_service_shutdown_discards_restore_intent(self):
+        self.register()
+        self.start(restore=True)
+        self.shutdown()
+        self.assertEqual(self.tunnels(), [])
+        self.assertEqual(self.master_count(), 1)
+
+    def test_multiple_opted_in_sessions_restore(self):
+        self.register()
+        first = self.start(restore=True)
+        second = self.start(mode="reverse", restore=True)
+        os.kill(self.worker_pid(), signal.SIGKILL)
+        for before in (first, second):
+            after = self.wait_state(before["id"], "ready", timeout=8)
+            self.assertNotEqual(before["pid"], after["pid"])
+        self.assertEqual(self.master_count(), 4)
+
+    def test_recovery_rate_limit(self):
+        self.register()
+        first = self.start(restore=True)
+        for attempt in range(3):
+            old = self.wait_state(first["id"], "ready")
+            os.kill(self.worker_pid(), signal.SIGKILL)
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline and self.master_count() < attempt + 2:
+                time.sleep(0.05)
+            self.assertEqual(self.master_count(), attempt + 2)
+            new = self.wait_state(first["id"], "ready", timeout=8)
+            self.assertNotEqual(old["pid"], new["pid"])
+        os.kill(self.worker_pid(), signal.SIGKILL)
+        from unittest.mock import patch
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            with patch.dict(os.environ, self.env):
+                status = control("status", "tunnel")
+            if status.get("recovery_warning") == "recovery_rate_limit":
+                break
+            time.sleep(0.05)
+        else:
+            self.fail("Recovery rate limit not reached")
+        self.assertEqual(status["state"], "down")
+        self.assertEqual(self.master_count(), 4)
+        result = self.cli("-tunnel", "-list")
+        self.assertEqual(result.stdout, "")
+        self.assertIn("recovery_rate_limit", result.stderr)
 
 
 if __name__ == "__main__":

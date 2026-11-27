@@ -51,4 +51,8 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-آدرس `-ip` باید پیش‌تر در Host Agent ثبت شده باشد. در Forward پورت روی Loopback محلی و در Reverse روی Loopback میزبان SSH باز می‌شود. احراز هویت SSH باید غیرتعاملی باشد. خروجی `state=starting` به‌معنی انتظار برای تأیید OpenSSH است. با `-list` وضعیت `ready` (تأیید Forwarding، نه دسترسی قطعی به Target) یا `failed` و `reason` را بررسی کنید. با `-stop` اتصال یا رکورد خطا را حذف کنید. جزئیات در [مستند معماری Tunnel](layer1-tunnel.md) آمده است.
+آدرس `-ip` باید پیش‌تر در Host Agent ثبت شده باشد. در Forward پورت روی Loopback محلی و در Reverse درخواست Loopback به میزبان SSH ارسال می‌شود؛ سرور باید GatewayPorts=no را اعمال کند. احراز هویت SSH باید غیرتعاملی باشد. خروجی `state=starting` به‌معنی انتظار برای تأیید OpenSSH است. با `-list` وضعیت `ready` (تأیید Forwarding، نه دسترسی قطعی به Target) یا `failed` و `reason` را بررسی کنید. با `-stop` اتصال یا رکورد خطا را حذف کنید. جزئیات در [مستند معماری Tunnel](layer1-tunnel.md) آمده است.
+
+برای بازیابی خودکار بعد از Crash شدن Tunnel Worker، گزینه `-restore` را هنگام ایجاد Tunnel اضافه کنید. بازیابی فقط برای Session آماده و در طول عمر همان Service Agent انجام می‌شود. توقف صریح، بازیابی را لغو می‌کند. قطع عادی SSH یا Restart کامل Service Agent باعث اتصال مجدد خودکار نمی‌شود.
+
+وضعیت failed در خروجی -list یک رکورد خطا است و به معنی موفقیت اتصال نیست؛ Exit Code صفر -list فقط موفق بودن عملیات فهرست را نشان می‌دهد. برای تشخیص Reasonها و ارتقا، [راهنمای عیب‌یابی](TROUBLESHOOTING_GUIDE.md) را ببینید.

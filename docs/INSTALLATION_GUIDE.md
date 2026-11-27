@@ -1,6 +1,6 @@
 # نصب در Linux
 
-Python 3.10 یا جدیدتر با sqlite3، Bash، GNU coreutils و OpenSSH Client لازم است. برای نصب سراسری دستورهای README را اجرا کنید. برای نصب شخصی پس از clone از ریشه مخزن اجرا کنید.
+Python 3.10 یا جدیدتر با sqlite3، Bash، GNU coreutils و OpenSSH Client لازم است. بازیابی Tunnel به Linux با memfd_create نیاز دارد. برای نصب سراسری دستورهای README را اجرا کنید. برای نصب شخصی پس از clone از ریشه مخزن اجرا کنید.
 
 ```bash
 clear
@@ -23,12 +23,19 @@ export PATH="$HOME/.local/bin:$PATH"
 | GUI | python3-tk شامل Tk/ttk و دسترسی به نمایشگر |
 | نمایش پنجره از طریق SSH | xauth روی سرور، X server روی کلاینت و X11 forwarding فعال در اتصال و مجاز در sshd |
 
-برای به‌روزرسانی نسخهٔ نصب‌شده روی سرور، در پوشهٔ پروژه و روی شاخهٔ feat/menu-interfaces اجرا کنید.
+## ارتقای نسخه و Service Agent
+
+پیش از ارتقا، Sessionهای فعال را بررسی و برای توقف آن‌ها برنامه‌ریزی کنید. Supervisor قبلی ممکن است همچنان کد Release قدیمی را اجرا کند. با همان کاربر و XDG_DATA_HOME که برنامه را اجرا می‌کند، سرویس را متوقف کنید؛ این کار همه Tunnelها را می‌بندد و قصد بازیابی را حذف می‌کند. سپس روی main به‌روزرسانی و نصب کنید.
 
 ```bash
 clear
-git pull --ff-only && ./install.sh
+git switch main
+git pull --ff-only
+python3 -m thirtyna.runtime.service shutdown
+sudo ./install.sh
 ```
+
+برای نصب شخصی، خط آخر را با PREFIX="$HOME/.local" ./install.sh جایگزین کنید. پایگاه داده Host حفظ می‌شود. برای عیب‌یابی نسخه یا Tunnel به [راهنمای عیب‌یابی](TROUBLESHOOTING_GUIDE.md) مراجعه کنید.
 
 برای تست نمایش واقعی پنجره، از داخل یک نشست Desktop یا SSH با X11 forwarding اجرا کنید.
 

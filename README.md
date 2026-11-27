@@ -1,6 +1,6 @@
 # 30nA-CLI
 
-Tunnel Agent: `30na -tunnel -help` (OpenSSH Forward/Reverse, Host Agent authorization). See [Tunnel documentation](docs/layer1-tunnel.md).
+Tunnel Agent: `30na -tunnel -help` (OpenSSH Forward/Reverse, confirmed readiness, failure reporting, opt-in worker crash recovery). See [Tunnel documentation](docs/layer1-tunnel.md).
 
 ابزار شخصی Linux با Agentهای مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و اتصال با OpenSSH.
 
@@ -67,3 +67,9 @@ clear
 ## شروع توسعه
 
 برای ورود سریع ایجنت‌های جدید، ابتدا [AGENTS.md](AGENTS.md) و [وضعیت توسعه](docs/DEVELOPMENT_STATUS.md) را بخوانید. سپس فقط فایل‌های مرتبط با مأموریت را بررسی کنید.
+
+## شواهد و عیب‌یابی
+
+[پذیرش و شواهد CI](docs/RELEASE_ACCEPTANCE.md) · [عیب‌یابی](docs/TROUBLESHOOTING_GUIDE.md) · [GitHub Actions](https://github.com/sina1991/30nA-CLI/actions)
+
+پیش از ارتقای نسخه، Service Agent فعال را مطابق راهنمای نصب متوقف کنید. این کار Sessionهای فعال را قطع می‌کند. بازیابی اختیاری فقط برای Crash شدن Tunnel Worker در طول عمر همان سرویس است.

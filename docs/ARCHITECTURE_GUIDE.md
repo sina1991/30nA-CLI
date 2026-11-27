@@ -9,3 +9,7 @@ Host برای هر فراخوانی یک اتصال SQLite باز می‌کند.
 ## Tunnel Agent
 
 Tunnel Agent پردازش Worker مستقل در همان Service Agent دارد و سوکت کنترل خود را از Port Agent مشترک دریافت می‌کند. ثبت Host تنها با درخواست احرازشده `Host Agent: exists` بررسی می‌شود و هیچ دسترسی مستقیمی به پایگاه داده Host ندارد. اجرای SSH به‌صورت subprocess بدون Shell است. Forward با OpenSSH `-L` و Reverse با `-R` اجرا می‌شود. توقف Worker موجب پاکسازی پردازش‌های SSH می‌شود. جزئیات در [layer1-tunnel.md](layer1-tunnel.md) است.
+
+### Tunnel lifecycle and recovery
+
+Tunnel Worker یک ControlMaster مستقل برای هر Session ایجاد می‌کند. فقط پاسخ موفق درخواست Forwarding معیار Ready است. Service Agent اطلاعات اتصال احرازشده Host Worker را از کانال خصوصی ارث‌رسیده در اختیار Tunnel قرار می‌دهد؛ Tunnel مستقیماً از IPC احرازشده Host مجوز می‌گیرد و درخواست بازگشتی به Supervisor ندارد. بازیابی اختیاری Sessionهای آماده با memfd موقت در حافظه و محدودیت نرخ انجام می‌شود. توقف صریح Worker یا Service Agent، قصد بازیابی را حذف می‌کند. جزئیات در [layer1-tunnel.md](layer1-tunnel.md).

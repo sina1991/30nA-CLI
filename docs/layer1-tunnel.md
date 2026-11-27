@@ -24,7 +24,20 @@ The CLI returns id, pid and state=starting or state=ready; initial errors may re
 
 ## Lifecycle and recovery policy
 
-The worker terminates only its own SSH children, not foreign listeners. Parent-death signalling handles worker crashes; normal shutdown removes control directories and closes logs. SIGKILL may leave a private temporary control directory (the SSH process is terminated; do not reuse stale sockets). Failed entries and tunnel IDs are in memory and disappear after worker restart. Host removal does not automatically terminate an established tunnel. Automatic restoration is not implemented in this change and is not claimed. A fresh CLI start reauthorizes the host. Do not rely on this for high availability.
+The worker terminates only its own SSH children, not foreign listeners. Parent-death signalling handles worker crashes; normal shutdown removes control directories and closes logs. The supervisor owns a separate private directory for each Tunnel worker and removes that exact directory on worker exit. A supervisor SIGKILL can leave its private temporary directory, but stale sockets are never reused.
+
+By default, tunnels are not restored. Add the explicit `-restore` switch to a forward or reverse start to opt in:
+
+```bash
+clear
+30na -tunnel -forward -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80 -restore
+```
+
+Only confirmed ready opted-in sessions are recorded in a RAM-only memfd journal owned by the Tunnel worker and retained by the running Service Agent. The supervisor checks for worker death and recreates it while there is recovery intent, at most three automatic recreations per 60 seconds. The new worker consumes the old intent before attempting recovery, reauthorizes each host using authenticated Host IPC and reissues forwarding with the same ID and a new SSH PID. The `-list` output includes restore=on; while recovering a queued entry can show pid=0. Interrupted/malformed journal writes are discarded rather than replaying older intent.
+
+An ordinary SSH disconnect is reported as failed; it is not retried indefinitely. Failed recovery is not automatically retried. Removing a Host prevents future restoration but does not terminate an existing connection. Explicit `-stop -id` removes intent before terminating the session; stopping the Tunnel worker or Service Agent discards all recovery intent. Service restart, system reboot and existing TCP streams are not recoverable by this mechanism. No SSH credentials are stored. This is bounded worker-crash recovery, not a high-availability connection manager.
+
+The supervisor supplies the current Host worker reference over its private inherited control channel. Tunnel authenticates directly with Host; it does not invoke the supervisor recursively. This avoids the former lock inversion under concurrent CLI requests. Restart the old Service Agent before switching installed releases; the new Tunnel CLI checks its worker protocol version.
 
 ```bash
 clear

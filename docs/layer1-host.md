@@ -24,9 +24,10 @@ live under the owner-only .runtime directory beside hosts.db. Agents sharing
 a Unix account and data directory share its authority. Each resolved data
 directory has a separate supervisor and database.
 
-Stop closes the lifetime channel and waits for the direct child. Unexpected
-supervisor exit also closes this channel. A dead child is reaped on the next
-lifecycle request. No saved PID or port is used to signal processes.
+Stop closes the private lifetime channel and waits for the direct child. Unexpected
+supervisor exit also closes this channel. Host workers are reaped on the next
+lifecycle request. Tunnel workers may be recreated automatically only for opt-in
+recovery; see layer1-tunnel.md. No saved PID or port is used to signal processes.
 SSH runs in the frontend after the worker authorizes the saved address
 (or successfully inserts it for add with SSH), preserving terminal ownership.
 
