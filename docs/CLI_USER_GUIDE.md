@@ -79,3 +79,41 @@ clear
 ```
 
 برای دسترسی به Calculator، System، Host، Tunnel، Files و Help از [راهنمای مرکز کنترل](TUI_GUIDE.md) استفاده کنید.
+
+## Systemd Service Agent
+
+```bash
+clear
+30na -service -help
+30na -service -active
+30na -service -list
+30na -service -installed
+30na -service -workers
+30na -service -status -unit ssh.service
+30na -service -logs -unit ssh.service
+```
+
+عملیات تغییر وضعیت را تنها با مجوز مناسب و پس از بررسی تأثیر آن روی اتصال SSH انجام دهید. [راهنمای Service Agent](SYSTEMD_SERVICE_GUIDE.md).
+
+### IP سرور محلی
+
+```bash
+clear
+30na -sys -ip
+```
+
+بدون ثبت Host، آدرس‌های Interface محلی را نمایش می‌دهد. برای تشخیص IP عمومی پشت NAT از این خروجی نتیجه‌گیری نکنید.
+
+## Port Agent
+
+```bash
+clear
+30na -port -list
+30na -port -all
+30na -port -summary
+30na -port -check 5555
+```
+
+[راهنمای Port Agent](PORT_AGENT_GUIDE.md).
+
+آزادسازی اضطراری Port فقط با پروتکل و مالک صریح انجام می‌شود؛ ابتدا -check را اجرا کنید. [راهنمای -force](PORT_AGENT_GUIDE.md).

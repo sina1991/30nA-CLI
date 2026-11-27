@@ -9,6 +9,7 @@ import textwrap
 import time
 
 from .model import label
+from .panels import HELP, FIELD_HELP, layout, suggestions
 
 LAUNCHER = Path(__file__).resolve().parents[2] / "30na"
 LIMIT = 65536
@@ -40,6 +41,11 @@ class Action:
                 if not value.strip():
                     raise ValueError(self.fields[part].name + " is required")
                 args.append(value)
+            elif part == "@protocol":
+                value = values[1].lower()
+                if value not in ("tcp", "udp"):
+                    raise ValueError("Protocol must be tcp or udp")
+                args.append("-" + value)
             elif part == "@restore":
                 value = values[-1].lower()
                 if value not in ("yes", "no"):
@@ -55,9 +61,9 @@ def tunnel(mode):
     return Action(mode.capitalize() + " tunnel",
                   ("-tunnel", "-" + mode, "-domain", 0, "-listen", 1,
                    "-target", 2, "-target-port", 3, "@restore"),
-                  (Field("Registered IP or domain", picker="host"), Field("Listen port", "5555"),
-                   Field("Target IP", "127.0.0.1"), Field("Target port", "443"),
-                   Field("Restore (yes/no)", "no")),
+                  (Field("Registered IP or domain", picker="host"), Field("Listen port", "5555", "listen"),
+                   Field("Target IP", "127.0.0.1", "target"), Field("Target port", "443", "target-port"),
+                   Field("Restore (yes/no)", "no", "restore")),
                   hint="Loopback listener; register the SSH host first.")
 
 
@@ -72,7 +78,7 @@ CATALOG = (
                (Field("First number"), Field("Second number")),
                hint="Prints add, subtract, multiply, divide in that order."),)),
     ("System", (Action("All system fields", ("-sys", *("-" + f for f in SYSTEM))),)
-     + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM)),
+     + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM) + (Action("Local interface IPs", ("-sys", "-ip")),)),
     ("Host", (
         Action("List hosts", ("-host", "-list")),
         Action("Register IP or domain", ("-host", "-add", "-domain", 0),
@@ -98,7 +104,31 @@ CATALOG = (
     ("Help", tuple(Action(name, args) for name, args in (
         ("All agents", ("-help",)), ("Calculator help", ("-calc", "-help")),
         ("System help", ("-sys", "-help")), ("Host help", ("-host", "-help")),
-        ("Tunnel help", ("-tunnel", "-help")), ("Menu help", ("-menu", "-help"))))),
+        ("Tunnel help", ("-tunnel", "-help")), ("Menu help", ("-menu", "-help")),
+        ("Service help", ("-service", "-help")), ("Port help", ("-port", "-help"))))),
+    ("Services", tuple(Action(title, ("-service", "-" + op)) for title, op in (
+        ("Active services", "active"), ("All loaded services", "list"),
+        ("Installed unit files", "installed"), ("30nA worker status", "workers")))
+     + tuple(Action(op.capitalize() + " service", ("-service", "-" + op, "-unit", 0),
+                    (Field("Service unit", picker="unit"),), confirm=op not in ("status", "logs"),
+                    hint="Uses system scope; requires existing permissions.")
+             for op in ("status", "start", "stop", "restart", "reload", "enable", "disable", "logs"))
+     + (Action("Reload systemd manager", ("-service", "-daemon-reload"), confirm=True),)),
+    ("Ports", (
+        Action("Listening TCP / bound UDP", ("-port", "-list")),
+        Action("All TCP/UDP sockets", ("-port", "-all")),
+        Action("TCP listeners", ("-port", "-list", "-tcp")),
+        Action("UDP bound sockets", ("-port", "-list", "-udp")),
+        Action("Port counts", ("-port", "-summary")),
+        Action("Inspect port number", ("-port", "-check", 0),
+               (Field("Port number", "5555", "listen"),)),
+        Action("Emergency release by unit", ("-port", "-force", 0, "@protocol", "-unit", 2),
+               (Field("Port number", "5555", "listen"), Field("Protocol", "tcp", "protocol"), Field("Exact owning unit", picker="unit")),
+               confirm=True, hint="Inspect port first. Stops entire selected service."),
+        Action("Emergency release by PID", ("-port", "-force", 0, "@protocol", "-pid", 2),
+               (Field("Port number", "5555", "listen"), Field("Protocol", "tcp", "protocol"), Field("Exact standalone PID")),
+               confirm=True, hint="Inspect port first. Terminates the selected process."),
+    )),
 )
 
 
@@ -113,6 +143,8 @@ class Result:
 def invoke(args, interactive=False, timeout=15):
     """No shell. Pin Python and launcher to the current installed release."""
     argv = [sys.executable, str(LAUNCHER), *args]
+    if args[:2] == ["-port", "-force"]:
+        timeout = max(timeout, 60)
     try:
         if interactive:
             return Result(subprocess.run(argv).returncode,
@@ -138,21 +170,44 @@ class Snapshot:
         self.tunnels = None
         self.host_time = None
         self.tunnel_time = None
+        self.host_rows = []
+        self.tunnel_rows = []
+        self.system = []
+        self.local_ips = None
+        self.services = None
+        self.ports = None
+        self.port_rows = None
+        self.workers = None
+        self.overview_time = None
 
     def invalidate(self, args):
+        if args and args[0] == "-port" and "-force" in args:
+            self.ports = self.port_rows = self.services = self.workers = None
+            self.tunnels = self.tunnel_time = None
+            self.tunnel_rows = []
+        if args and (args[0] == "-tunnel" and "-list" not in args or
+                     args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-status", "-logs", "-help")):
+            self.ports = self.port_rows = None
         if args and args[0] == "-host" and "-list" not in args:
             self.hosts = self.host_time = None
+            self.host_rows = []
         if args and args[0] == "-tunnel" and "-list" not in args:
             self.tunnels = self.tunnel_time = None
+            self.tunnel_rows = []
+        if args and args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-status", "-logs", "-help"):
+            self.services = None
 
     def observe(self, args, result):
         if args == ["-host", "-list"]:
             self.hosts = self.host_time = None
+            self.host_rows = []
             if result.code == 0 and not result.truncated:
-                self.hosts = len(result.stdout.splitlines())
+                self.host_rows = result.stdout.splitlines()
+                self.hosts = len(self.host_rows)
                 self.host_time = time.strftime("%H:%M:%S")
         elif args == ["-tunnel", "-list"]:
             self.tunnels = self.tunnel_time = None
+            self.tunnel_rows = []
             if result.code == 0 and not result.truncated:
                 counts = dict(ready=0, starting=0, failed=0)
                 for line in result.stdout.splitlines():
@@ -161,16 +216,54 @@ class Snapshot:
                         return
                     counts[states[0]] += 1
                 self.tunnels = counts
+                self.tunnel_rows = result.stdout.splitlines()
                 self.tunnel_time = time.strftime("%H:%M:%S")
+        elif args == ["-port", "-list"]:
+            self.ports = self.port_rows = None
+            if result.code == 0 and not result.truncated:
+                rows = result.stdout.splitlines()
+                counts = {"tcp": set(), "udp": set()}
+                for line in rows:
+                    words = line.split()
+                    if len(words) < 6 or words[0] not in counts or not words[3].startswith("port="):
+                        return
+                    try:
+                        number = int(words[3][5:])
+                    except ValueError:
+                        return
+                    if not 1 <= number <= 65535:
+                        return
+                    counts[words[0]].add(number)
+                self.port_rows = rows
+                self.ports = {proto: len(numbers) for proto, numbers in counts.items()}
+        elif args == ["-service", "-active"]:
+            self.services = None
+            if result.code == 0 and not result.truncated:
+                self.services = [line.split()[0] for line in result.stdout.splitlines()
+                                 if line.split() and line.split()[0].endswith(".service")]
+        elif args == ["-service", "-workers"]:
+            self.workers = None
+            if result.code == 0 and not result.truncated:
+                rows = dict(line.split() for line in result.stdout.splitlines() if len(line.split()) == 2)
+                if set(rows) == {"host", "tunnel", "supervisor", "port"}:
+                    self.workers = rows
+        elif args == ["-sys", "-ip"]:
+            self.local_ips = None
+            if result.code == 0 and not result.truncated:
+                self.local_ips = [] if result.stdout.strip() == "none" else result.stdout.split()
+        elif args == ["-sys", *("-" + f for f in SYSTEM)]:
+            self.system = list(zip(SYSTEM, result.stdout.splitlines())) if result.code == 0 and not result.truncated else []
 
     def summary(self, compact=False):
         hosts = "?" if self.hosts is None else str(self.hosts)
         t = self.tunnels
         tunnels = "?/?/?" if t is None else f'{t["ready"]}/{t["starting"]}/{t["failed"]}'
+        p = self.ports
+        ports = "?/?" if p is None else f'{p["tcp"]}/{p["udp"]}'
         if compact:
-            return f"H {hosts} | R/S/F {tunnels}"
+            return f"H {hosts} | R/S/F {tunnels} | P {ports}"
         ht, tt = self.host_time or "--", self.tunnel_time or "--"
-        return f"Hosts {hosts} | Tunnels R/S/F {tunnels} | H {ht} T {tt}"
+        return f"Hosts {hosts} | Tunnels R/S/F {tunnels} | Ports T/U {ports} | H {ht} T {tt}"
 
 
 class Dashboard:
@@ -195,10 +288,13 @@ class Dashboard:
         self.detail = "Choose an agent. r refreshes counts."
         self.output = []
         self.scroll = 0
+        self.side_scroll = 0
 
-    def draw(self, y, x, value, style=0, fill=False):
+    def draw(self, y, x, value, style=0, fill=False, limit=None):
         h, w = self.screen.getmaxyx()
         width = w - x - 1
+        if limit is not None:
+            width = min(width, limit)
         if not 0 <= y < h or width <= 0:
             return
         value = label(value)
@@ -216,11 +312,11 @@ class Dashboard:
             return "y confirm | n / Esc cancel"
         if self.page == "picker":
             return "Up/Down or j/k | Enter select | Esc cancel"
-        if self.page == "result":
+        if self.page in ("result", "overview"):
             return "j/k or arrows scroll | PgUp/PgDn | Esc back | q quit"
         if self.page == "form":
             return "j/k or Tab | Enter edit/run | f/F2 pick | Esc back"
-        return "j/k or arrows | Enter open | r refresh | Esc back | q quit"
+        return "j/k Enter open | r refresh | v overview | [ ] panel | Esc | q"
 
     def render(self):
         s = self.screen
@@ -232,56 +328,99 @@ class Dashboard:
             self.draw(h-1, 0, "q Quit / resize", self.active, True)
             s.refresh()
             return
+        region = layout(h, w)
         category, actions = CATALOG[self.category]
-        title = {"home": "AGENTS", "actions": category.upper(),
-                 "form": category + " / " + (self.action.title if self.action else ""),
-                 "result": "COMMAND OUTPUT", "picker": "SELECT SAVED ENTRY"}[self.page]
-        self.draw(1, 1, title, self.accent)
-        body = h - 6
-        if self.page == "result":
+        focused = CATALOG[self.index][0] if self.page == "home" else category
+        context = HELP[focused]
+        if self.page == "actions":
+            item = actions[self.index]
+            context = item.hint or (item.title + ": " + " ".join(str(a) for a in item.args if isinstance(a, str) and not a.startswith("@")))
+        elif self.page in ("form", "picker") and self.index < len(self.action.fields):
+            field = self.action.fields[self.index]
+            context = FIELD_HELP.get(field.picker, self.action.hint or field.name + ": Enter to edit.")
+        elif self.page == "result":
+            context = "Scroll output with j/k. Esc returns to the form."
+        sysinfo = dict(self.snapshot.system)
+        if region.expanded:
+            half = w//2
+            self.draw(1, 1, "SYSTEM / " + sysinfo.get("hostname", "?"), self.accent, limit=half-2)
+            self.draw(1, half+1, "CONTEXT HELP / " + focused, self.accent, limit=w-half-2)
+            info = ["IP " + self.local_ip_text(), "OS " + sysinfo.get("os", "?"),
+                    "Kernel " + sysinfo.get("kernel", "?") + " | Up " + sysinfo.get("uptime", "?"),
+                    "CPU " + sysinfo.get("cpu", "?"),
+                    "RAM " + sysinfo.get("ram", "?"),
+                    "Disk " + sysinfo.get("disk", "?")]
+            for i, line in enumerate(info, 2):
+                self.draw(i, 1, line, limit=half-2)
+            for i, line in enumerate(textwrap.wrap(context, max(1, w-half-3))[:5], 2):
+                self.draw(i, half+1, line, limit=w-half-2)
+            for y in range(1, region.top-1):
+                self.draw(y, half, "|", self.accent, limit=1)
+            self.draw(region.top-1, 1, "AGENTS", self.accent, limit=region.left-2)
+            self.draw(region.top-1, region.right, "OBSERVED STATUS", self.accent, limit=w-region.right-1)
+            focus_index = self.index if self.page == "home" else self.category
+            first_agent = max(0, focus_index-region.body+1)
+            for i, (name, _) in enumerate(CATALOG[first_agent:first_agent+region.body], first_agent):
+                self.draw(region.top+i-first_agent, 1, f"{i+1}. {name}",
+                          self.active if name == focused else self.normal,
+                          fill=name == focused, limit=region.left-2)
+            side = self.side_lines()
+            self.side_scroll = min(self.side_scroll, max(0, len(side)-region.body))
+            for i, line in enumerate(side[self.side_scroll:self.side_scroll+region.body]):
+                self.draw(region.top+i, region.right, line, self.normal, limit=w-region.right-1)
+            for y in range(region.top, h-4):
+                self.draw(y, region.left-1, "|", self.accent, limit=1)
+                self.draw(y, region.right-1, "|", self.accent, limit=1)
+        elif region.top >= 4:
+            self.draw(1, 1, sysinfo.get("hostname", "?") + " | IP " + self.local_ip_text(), self.accent)
+            self.draw(2, 1, "HELP: " + context, self.normal)
+        title = {"home": "AGENTS" if not region.expanded else focused.upper() + " / OPTIONS",
+                 "actions": category.upper(), "form": category + " / " + (self.action.title if self.action else ""),
+                 "result": "COMMAND OUTPUT", "picker": "SELECT ENTRY", "overview": "SYSTEM / SERVICES / WORKERS"}[self.page]
+        self.draw(region.top-1, region.left, title, self.accent, limit=region.width)
+        body = region.body
+        if self.page in ("result", "overview"):
             lines = []
-            for line in self.output:
-                lines.extend(textwrap.wrap(label(line), max(1, w-3),
-                                           replace_whitespace=False,
-                                           drop_whitespace=False) or [""])
-            max_scroll = max(0, len(lines)-body)
-            self.scroll = min(self.scroll, max_scroll)
+            for line in (self.output if self.page == "result" else self.overview_lines()):
+                lines.extend(textwrap.wrap(label(line), max(1, region.width-1),
+                                           replace_whitespace=False, drop_whitespace=False) or [""])
+            self.scroll = min(self.scroll, max(0, len(lines)-body))
             for i, line in enumerate(lines[self.scroll:self.scroll+body]):
-                self.draw(2+i, 1, line)
+                self.draw(region.top+i, region.left, line, limit=region.width)
         elif self.page == "picker":
             first = max(0, self.choice_index-body+1)
             for i, (_, desc) in enumerate(self.choices[first:first+body], first):
                 selected = i == self.choice_index
-                self.draw(2+i-first, 1, ("> " if selected else "  ") + desc,
-                          self.active if selected else self.normal, fill=selected)
+                self.draw(region.top+i-first, region.left, ("> " if selected else "  ") + desc,
+                          self.active if selected else self.normal, fill=selected, limit=region.width)
         else:
             if self.page == "home":
-                rows = [f"{i+1}. {name}" for i, (name, _) in enumerate(CATALOG)]
+                rows = ([a.title for a in CATALOG[self.index][1]] if region.expanded else
+                        [f"{i+1}. {name}" for i, (name, _) in enumerate(CATALOG)])
             elif self.page == "actions":
                 rows = [a.title for a in actions]
             else:
                 rows = []
                 for i, (f, v) in enumerate(zip(self.action.fields, self.values)):
                     if self.editing and i == self.index:
-                        rows.append("Edit: " + self.buffer[-max(1, w-12):] + "_")
+                        rows.append("Edit: " + self.buffer[-max(1, region.width-10):] + "_")
                     else:
-                        rows.append(f"{f.name}: {v}")
+                        rows.append(f"{f.name}: {v}" + (" [f]" if f.picker else ""))
                 rows.append("[ RUN COMMAND ]")
-                if self.index < len(self.action.fields) and self.action.fields[self.index].picker:
-                    rows.append("f / F2: choose a saved entry")
                 if self.action.hint:
                     rows.append(self.action.hint)
                 try:
                     cmd = "30na " + shlex.join(self.action.command(self.values))
                     if self.action.args[0] != "@files":
-                        rows.extend(textwrap.wrap(cmd, max(1, w-4)))
+                        rows.extend(textwrap.wrap(cmd, max(1, region.width-3)))
                 except ValueError:
                     pass
-            first = max(0, self.index-body+1)
+            preview = self.page == "home" and region.expanded
+            first = 0 if preview else max(0, self.index-body+1)
             for i, line in enumerate(rows[first:first+body], first):
-                self.draw(2+i-first, 1, ("> " if i == self.index else "  ") + line,
-                          self.active if i == self.index else self.normal,
-                          fill=i == self.index)
+                selected = not preview and i == self.index
+                self.draw(region.top+i-first, region.left, ("> " if selected else "  ") + line,
+                          self.active if selected else self.normal, fill=selected, limit=region.width)
         if self.confirming:
             self.draw(h-4, 0, " CONFIRM: " + self.action.title + "? ", self.warning, True)
         else:
@@ -291,27 +430,29 @@ class Dashboard:
         self.draw(h-3, 0, " STATUS | " + self.status + " | " + self.detail,
                   self.status_styles.get(self.status.split()[0], self.active), True)
         keys = self.keys()
-        legend = " Snapshot: R ready / S starting / F failed; ? unknown"
+        legend = " R/S/F: ready/starting/failed | T/U: TCP/UDP port numbers | ? unknown"
         if w < 55:
             if self.editing:
                 keys = "Enter save | Esc cancel"
             elif self.confirming:
                 keys = "y confirm | n cancel"
-            elif self.page == "result":
+            elif self.page in ("result", "overview"):
                 keys = "j/k scroll | Esc back"
             elif self.page == "picker":
                 keys = "j/k | Enter select | Esc"
             elif self.page == "form":
                 keys = "j/k Enter f:pick Esc"
             else:
-                keys = "j/k Enter r:refresh q"
-            legend = "H:hosts R/S/F snapshot"
+                keys = "j/k Enter r v:view q"
+            legend = "H:hosts P:TCP/UDP ports"
         self.draw(h-2, 0, keys, self.accent, True)
-        self.draw(h-1, 0, legend, self.normal, True)
+        self.draw(h-1, 0, legend + " | v Overview | " + (self.snapshot.overview_time or "--"), self.normal, True)
         s.refresh()
 
     def set_result(self, args, result):
         self.snapshot.observe(args, result)
+        if args and args[0] in ("-host", "-tunnel"):
+            self.snapshot.workers = None
         self.status = ("OK" if result.code == 0 else "ERROR") + f" exit={result.code}"
         self.detail = ("Review output (stderr)" if result.stderr else "Command completed") if result.code == 0 else "Review output"
         self.output = ["$ 30na " + shlex.join(args), ""]
@@ -324,41 +465,110 @@ class Dashboard:
             self.output.append("(No output)")
         if args == ["-tunnel", "-list"]:
             self.output.append("Exit 0 means list succeeded, not all tunnels are ready.")
+        if args and args[0] == "-tunnel" and "host_key_failed" in result.stderr + result.stdout:
+            self.output.extend(["", "HOST KEY: verify the SSH server fingerprint using a trusted source.",
+                                "Open Host > Connect SSH for the registered endpoint (same user/config).",
+                                "Do not disable host-key verification or blindly remove known_hosts entries.",
+                                "Retry the tunnel after verified noninteractive SSH works."])
         self.page, self.scroll = "result", 0
 
+    def side_lines(self):
+        snap = self.snapshot
+        rows = ["ACTIVE SERVICES: " + ("?" if snap.services is None else str(len(snap.services))), "WORKERS"]
+        rows += ([f"{name}: {snap.workers[name]}" for name in ("supervisor", "port", "host", "tunnel")]
+                 if snap.workers else ["Unknown"])
+        rows += ["HOSTS: " + ("?" if snap.hosts is None else str(snap.hosts))]
+        rows += snap.host_rows if snap.host_rows else (["None"] if snap.hosts == 0 else [])
+        rows += ["TUNNELS R/S/F"]
+        if snap.tunnels is None:
+            rows += ["Unknown"]
+        else:
+            rows += [f'{snap.tunnels["ready"]}/{snap.tunnels["starting"]}/{snap.tunnels["failed"]}']
+            for line in snap.tunnel_rows:
+                words = line.split()
+                if len(words) >= 5:
+                    state = next((v[6:] for v in words if v.startswith("state=")), "?")
+                    rows.append(f"{words[3]} {state} {words[2]}")
+        rows += ["PORTS TCP/UDP"]
+        if snap.ports is None:
+            rows += ["Unknown"]
+        else:
+            rows += [f'{snap.ports["tcp"]}/{snap.ports["udp"]} distinct ports']
+            for line in snap.port_rows:
+                words = line.split()
+                rows.append(f"{words[0]} {words[3][5:]} {words[4][5:]}")
+        rows += ["SERVICE NAMES"]
+        rows += snap.services if snap.services else (["None"] if snap.services == [] else [])
+        return rows
+
+    def local_ip_text(self):
+        ips = self.snapshot.local_ips
+        return "?" if ips is None else " ".join(ips) if ips else "none"
+
+    def overview_lines(self):
+        return ["SYSTEM", "Local IPs: " + self.local_ip_text(), *[f"{k}: {v}" for k, v in self.snapshot.system],
+                "", *self.side_lines(), "", "Last overview: " + (self.snapshot.overview_time or "unknown"),
+                "Worker states are last observed; port reported is not a liveness probe.",
+                "Registered host does not mean connected. Use agent lists for full details."]
+
+    def refresh_overview(self):
+        for args in (["-sys", *("-" + f for f in SYSTEM)], ["-sys", "-ip"], ["-service", "-active"], ["-service", "-workers"], ["-port", "-list"]):
+            self.snapshot.observe(args, self.runner(args))
+        self.snapshot.overview_time = time.strftime("%H:%M:%S")
+        self.side_scroll = 0
+
     def refresh_counts(self):
-        self.status, self.detail = "RUNNING", "Refreshing hosts and tunnels"
+        self.status, self.detail = "RUNNING", "Refreshing dashboard"
         self.render()
         results = []
         for args in (["-host", "-list"], ["-tunnel", "-list"]):
             result = self.runner(args)
             self.snapshot.observe(args, result)
             results.append(result)
+        self.refresh_overview()
         failed = next((r for r in results if r.code or r.truncated), None)
         if failed or self.snapshot.hosts is None or self.snapshot.tunnels is None:
             self.status = "ERROR refresh"
             self.detail = "Counts incomplete; open agent list for details"
         else:
-            self.status, self.detail = "OK", "Counts refreshed"
+            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.workers is None or self.snapshot.ports is None else "Counts refreshed")
 
     def open_picker(self):
         field = self.action.fields[self.index]
-        args = ["-" + field.picker, "-list"]
-        self.status, self.detail = "RUNNING", "Loading saved entries"
+        kind = field.picker
+        self.status, self.detail = "RUNNING", "Loading choices"
         self.render()
-        result = self.runner(args)
-        self.snapshot.observe(args, result)
-        if result.code or result.truncated:
-            self.status, self.detail = "ERROR picker", "List failed; open agent list for details"
-            return
-        self.choices = [(line.split()[0], line) for line in result.stdout.splitlines()
-                        if line.strip()]
-        if not self.choices:
-            self.status, self.detail = "READY", "No saved entries"
-            return
+        if kind in ("host", "tunnel", "unit"):
+            commands = ([["-service", "-installed"], ["-service", "-list"]] if kind == "unit"
+                        else [["-" + kind, "-list"]])
+            rows = {}
+            for args in commands:
+                result = self.runner(args)
+                self.snapshot.observe(args, result)
+                if result.code or result.truncated:
+                    continue
+                for line in result.stdout.splitlines():
+                    if not line.strip():
+                        continue
+                    key = line.split()[0]
+                    if kind == "unit" and not key.endswith(".service"):
+                        continue
+                    rows[key] = line
+            self.choices = list(rows.items())
+            if kind != "tunnel":
+                self.choices.append((None, "[Enter custom value]"))
+            elif not self.choices:
+                self.choices.append((None, "[Enter tunnel ID manually]"))
+        else:
+            local_ips = []
+            if kind == "target":
+                result = self.runner(["-sys", "-ip"])
+                self.snapshot.observe(["-sys", "-ip"], result)
+                local_ips = self.snapshot.local_ips or []
+            self.choices = suggestions(kind, self.values[self.index], local_ips)
         self.choice_index = 0
         self.page = "picker"
-        self.status, self.detail = "OK", "Select a saved entry"
+        self.status, self.detail = "OK", "Select a value or enter custom"
 
     def execute(self):
         try:
@@ -395,7 +605,9 @@ class Dashboard:
         self.set_result(args, result)
 
     def back(self):
-        if self.page == "picker":
+        if self.page == "overview":
+            self.page, self.index = "home", self.category
+        elif self.page == "picker":
             self.page = "form"
         elif self.page == "result":
             self.page = "form"
@@ -443,7 +655,13 @@ class Dashboard:
         h, w = self.screen.getmaxyx()
         if h < 8 or w < 24:
             return True
-        if key in ("r", c.KEY_F5) and self.page in ("home", "actions"):
+        if key in ("[", "]"):
+            self.side_scroll = max(0, self.side_scroll + (1 if key == "]" else -1))
+            return True
+        if key == "v" and self.page in ("home", "actions"):
+            self.page, self.scroll = "overview", 0
+            return True
+        if key in ("r", c.KEY_F5) and self.page in ("home", "actions", "overview"):
             self.refresh_counts()
             return True
         if self.page == "picker":
@@ -452,22 +670,26 @@ class Dashboard:
             elif key in (c.KEY_DOWN, "j"):
                 self.choice_index = (self.choice_index+1) % len(self.choices)
             elif enter:
-                self.values[self.index] = self.choices[self.choice_index][0]
+                chosen = self.choices[self.choice_index][0]
                 self.page = "form"
+                if chosen is None:
+                    self.buffer, self.editing = self.values[self.index], True
+                else:
+                    self.values[self.index] = chosen
             return True
         if self.page == "form" and key in ("f", c.KEY_F2) and self.index < len(self.action.fields):
             if self.action.fields[self.index].picker:
                 self.open_picker()
             return True
-        if self.page == "result":
+        if self.page in ("result", "overview"):
             if key in (c.KEY_UP, "k"):
                 self.scroll = max(0, self.scroll-1)
             elif key in (c.KEY_DOWN, "j"):
                 self.scroll += 1
             elif key == c.KEY_PPAGE:
-                self.scroll = max(0, self.scroll-max(1, h-6))
+                self.scroll = max(0, self.scroll-layout(h, w).body)
             elif key == c.KEY_NPAGE:
-                self.scroll += max(1, h-6)
+                self.scroll += layout(h, w).body
             return True
         count = (len(CATALOG) if self.page == "home" else
                  len(CATALOG[self.category][1]) if self.page == "actions" else
@@ -476,7 +698,7 @@ class Dashboard:
             self.index = (self.index-1) % count
         elif key in (c.KEY_DOWN, "j", "\t"):
             self.index = (self.index+1) % count
-        elif self.page == "home" and isinstance(key, str) and key in "123456":
+        elif self.page == "home" and isinstance(key, str) and key in "12345678":
             self.category, self.page, self.index = int(key)-1, "actions", 0
         elif enter:
             if self.page == "home":
@@ -515,6 +737,13 @@ class Dashboard:
             self.c.curs_set(0)
         except self.c.error:
             pass
+        self.render()
+        self.refresh_overview()
+        # Do not bootstrap stopped runtime workers merely to draw the dashboard.
+        for name in ("host", "tunnel"):
+            if self.snapshot.workers and self.snapshot.workers.get(name) == "ready":
+                args = ["-" + name, "-list"]
+                self.snapshot.observe(args, self.runner(args))
         while True:
             self.render()
             if not self.handle(self.screen.get_wch()):

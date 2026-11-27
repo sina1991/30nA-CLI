@@ -17,12 +17,13 @@ ready() {
         "$python_bin" -c 'import sys, sqlite3, curses, tkinter, tkinter.ttk; sys.exit(sys.version_info < (3, 10))' &&
         command -v nano >/dev/null &&
         command -v ssh >/dev/null &&
+        command -v ss >/dev/null &&
         { ! "$ubuntu" || command -v xauth >/dev/null; }
 }
 
 if ! ready 2>/dev/null; then
     if ! "$ubuntu" || [[ ${INSTALL_DEPS:-1} == 0 ]]; then
-        echo "Requires Python 3.10+ with sqlite3, curses and Tk/ttk, nano, OpenSSH client and (Ubuntu) xauth." >&2
+        echo "Requires Python 3.10+ with sqlite3, curses and Tk/ttk, nano, OpenSSH client, iproute2 (ss) and (Ubuntu) xauth." >&2
         exit 1
     fi
     elevate=()
@@ -31,7 +32,7 @@ if ! ready 2>/dev/null; then
         elevate=(sudo)
     fi
     "${elevate[@]}" apt-get update
-    "${elevate[@]}" apt-get install -y --no-install-recommends python3 python3-tk libpython3-stdlib openssh-client nano ncurses-base xauth
+    "${elevate[@]}" apt-get install -y --no-install-recommends python3 python3-tk libpython3-stdlib openssh-client iproute2 nano ncurses-base xauth
     ready || { echo "System Python requires version 3.10+ and working sqlite3, curses and Tk." >&2; exit 1; }
 fi
 src=$(cd -- "$(dirname -- "$0")" && pwd)

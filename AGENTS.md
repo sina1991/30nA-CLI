@@ -22,7 +22,7 @@ Read this file first. Do not reload old chat transcripts or the entire repositor
 ## Invariants
 - Public agents expose SWITCH, NAME, run(argv); discovery belongs to core.
 - Host Agent alone accesses its SQLite storage. Shared endpoint validation is in thirtyna/address.py; DNS registration never implicitly authorizes resolved IPs. Tunnel authorization goes through authenticated Host IPC.
-- Service Agent supervises separate workers; shared Port Agent allocates worker control sockets. OpenSSH owns forwarding sockets; never kill a foreign listener.
+- Service Agent supervises separate workers; shared Port Agent allocates worker control sockets. OpenSSH owns forwarding sockets; runtime allocator and Tunnel never kill a foreign listener. Explicit public Port Agent emergency release follows its separate owner-verification policy.
 - Forward/reverse listeners request loopback binding. No readiness claim based only on a live PID. No credentials or private keys in source, logs or commits.
 - Preserve Linux isolation, XDG paths, error exit codes, noninteractive SSH and cleanup. Recovery is opt-in, RAM-only, bounded and reauthorizes Host. Explicit stop discards intent. Never infer readiness from process liveness or bypass Host IPC. Do not introduce unrelated dependencies or change unrelated agents.
 
@@ -37,3 +37,9 @@ Mock SSH and real OpenSSH are distinct evidence. Live tests must use isolated cr
 Report only mission, branch, baseline/head SHA, changed files, observed tests/CI, unresolved limitations, PR URL and next action. Update the relevant docs when changing a contract. Never hard-code a stale branch SHA in agent instructions; query GitHub. Keep this entry point short and link to detailed docs rather than duplicating them.
 
 For TUI control-center changes, read `docs/TUI_GUIDE.md`, `thirtyna/menus/dashboard.py`, `tests/test_dashboard.py`. Delegate to the same release CLI without a shell; keep observed counts separate from command exit status. Preserve direct file manager and legacy numbered/Tk modes.
+
+For systemd operations use `thirtyna/agents/systemctl.py`, `docs/SYSTEMD_SERVICE_GUIDE.md`, `tests/test_systemctl.py`. This public agent is distinct from the internal supervisor. Never escalate automatically or mutate real services in tests. Dashboard regions live in `thirtyna/menus/panels.py`.
+
+Local IP discovery: `thirtyna/agents/sysinfo.py` (`-sys -ip`) uses local interface information, not Host registration or external DNS. Target pickers must not require saved hosts to show local addresses.
+
+Public Port Inspection Agent: `thirtyna/agents/port.py`, `tests/test_port.py`, `docs/PORT_AGENT_GUIDE.md`. Distinct from runtime allocator; read-only by default. Explicit -force is the only public emergency release exception; verify exact owner, protect SSH/runtime/ancestors, never indiscriminately kill listeners. Owner/unit unknown when unavailable.
