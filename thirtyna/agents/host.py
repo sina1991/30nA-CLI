@@ -1,10 +1,7 @@
 import ipaddress
-import os
-from pathlib import Path
-import sqlite3
 import subprocess
 import sys
-from contextlib import closing
+from thirtyna.runtime.service import control, request
 
 from thirtyna.core import UsageError, input_value, parser
 
@@ -22,6 +19,8 @@ def run(argv):
     cli.add_argument("-ip", nargs="?", const="", metavar="ADDRESS")
     cli.add_argument("-ssh", action="store_true")
     args = cli.parse_args(argv)
+    agent = control("ensure", bootstrap=True)
+    address = None
     if args.list:
         if args.ip is not None or args.ssh:
             raise UsageError("-list takes no other options")
@@ -32,25 +31,11 @@ def run(argv):
             address = str(ipaddress.ip_address(args.ip or input_value("IP address:")))
         except ValueError as exc:
             raise UsageError("Invalid IP address") from exc
-    folder = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local/share") / "30na"
-    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-    try:
-        with closing(sqlite3.connect(folder / "hosts.db")) as db, db:
-            db.execute("CREATE TABLE IF NOT EXISTS hosts (ip TEXT PRIMARY KEY)")
-            if args.list:
-                for row in db.execute("SELECT ip FROM hosts ORDER BY ip"):
-                    print(row[0])
-            elif args.add:
-                db.execute("INSERT INTO hosts VALUES (?)", (address,))
-            elif args.remove:
-                if not db.execute("DELETE FROM hosts WHERE ip=?", (address,)).rowcount:
-                    raise UsageError("Host not found")
-            elif not db.execute("SELECT 1 FROM hosts WHERE ip=?", (address,)).fetchone():
-                raise UsageError("Host not found")
-    except sqlite3.IntegrityError as exc:
-        raise UsageError("Duplicate host") from exc
-    except sqlite3.Error as exc:
-        raise RuntimeError(f"Host storage failure: {exc}") from exc
+    op = "list" if args.list else "add" if args.add else "remove" if args.remove else "exists"
+    reply = request(agent, op, address)
+    if args.list:
+        for ip in reply["value"]:
+            print(ip)
     if args.ssh:
         options = [] if sys.stdin.isatty() else ["-o", "BatchMode=yes"]
         status = subprocess.run(["ssh", *options, "--", address]).returncode
