@@ -333,7 +333,7 @@ class Dashboard:
             self.snapshot.observe(args, result)
             results.append(result)
         failed = next((r for r in results if r.code or r.truncated), None)
-        if failed:
+        if failed or self.snapshot.hosts is None or self.snapshot.tunnels is None:
             self.status = "ERROR refresh"
             self.detail = "Counts incomplete; open agent list for details"
         else:
