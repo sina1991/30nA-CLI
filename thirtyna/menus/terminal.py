@@ -29,6 +29,9 @@ def browse(screen, session, c):
     except c.error:
         pass
     accent, active, normal, warning = palette(c)
+    if not session.direct and session.page is None:
+        from .dashboard import Dashboard
+        return Dashboard(screen, c, (accent, active, normal, warning), session.start).run()
     index = top = 0
     query = ""
     searching = False

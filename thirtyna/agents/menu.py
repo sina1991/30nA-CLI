@@ -11,8 +11,8 @@ NAME = "Menu Agent"
 
 
 def run(argv):
-    cli = parser(SWITCH, "Browse registered menus and directories.",
-                 "Examples: 30na -menu | 30na -menu -dir /var -tui | 30na -menu -gui")
+    cli = parser(SWITCH, "Open the TUI agent control center or browse directories.",
+                 "Examples: 30na -menu -tui | 30na -menu -dir /var -tui | 30na -menu -gui")
     targets = cli.add_mutually_exclusive_group()
     for key, (title, _) in MENUS.items():
         targets.add_argument("-" + key, dest="target", nargs="?", const=".",
