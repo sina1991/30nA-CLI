@@ -1,6 +1,6 @@
 # `-host -add`
 
-ثبت IPv4 یا IPv6 در SQLite؛ ثبت تکراری خطاست.
+ثبت IPv4، IPv6 یا Domain Name در SQLite؛ ثبت تکراری خطاست.
 
 ```bash
 clear

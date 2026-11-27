@@ -62,3 +62,7 @@ python3 -m unittest discover -s tests -v
 Each lifecycle scenario runs real CLI processes in temporary data directories.
 The tests match the worker's open socket inodes against Linux /proc/net/tcp,
 check supervisor child membership, and shut down the test runtime.
+
+## DNS endpoints
+
+Host validates numeric IPv4/IPv6 or ASCII fully qualified DNS names using thirtyna/address.py. The existing SQLite TEXT primary key is preserved; DNS names are canonicalized to lowercase without a terminal dot. Authorization is for the exact canonical endpoint, not resolved IPs. No network lookup or schema migration is performed at registration. Restart old Service Agents before using domain names.

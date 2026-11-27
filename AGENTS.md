@@ -21,7 +21,7 @@ Read this file first. Do not reload old chat transcripts or the entire repositor
 
 ## Invariants
 - Public agents expose SWITCH, NAME, run(argv); discovery belongs to core.
-- Host Agent alone accesses its SQLite storage. Tunnel authorization goes through authenticated Host IPC.
+- Host Agent alone accesses its SQLite storage. Shared endpoint validation is in thirtyna/address.py; DNS registration never implicitly authorizes resolved IPs. Tunnel authorization goes through authenticated Host IPC.
 - Service Agent supervises separate workers; shared Port Agent allocates worker control sockets. OpenSSH owns forwarding sockets; never kill a foreign listener.
 - Forward/reverse listeners request loopback binding. No readiness claim based only on a live PID. No credentials or private keys in source, logs or commits.
 - Preserve Linux isolation, XDG paths, error exit codes, noninteractive SSH and cleanup. Recovery is opt-in, RAM-only, bounded and reauthorizes Host. Explicit stop discards intent. Never infer readiness from process liveness or bypass Host IPC. Do not introduce unrelated dependencies or change unrelated agents.

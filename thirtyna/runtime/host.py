@@ -1,14 +1,14 @@
 """Host operations execute exclusively in the worker."""
 from contextlib import closing
-import ipaddress
 import sqlite3
 
 from thirtyna.core import UsageError
+from thirtyna.address import host_address
 
 
 def handle(folder, op, ip):
     if op != "list":
-        ip = str(ipaddress.ip_address(ip))
+        ip = host_address(ip)
     try:
         with closing(sqlite3.connect(folder / "hosts.db")) as db, db:
             db.execute("CREATE TABLE IF NOT EXISTS hosts (ip TEXT PRIMARY KEY)")

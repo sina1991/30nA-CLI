@@ -88,7 +88,9 @@ LogLevel ERROR
         public = (self.root / "host_key.pub").read_text().split()[:2]
         (self.root / "known_hosts").write_text(f"[127.0.0.1]:{port} {' '.join(public)}\n")
         self.config = self.root / "ssh_config"
-        self.config.write_text(f"""Host 127.0.0.1
+        self.config.write_text(f"""Host ssh.example.test
+    HostName 127.0.0.1
+Host 127.0.0.1 ssh.example.test
     User {self.user}
     Port {port}
     IdentityFile {self.root / 'client_key'}
@@ -231,4 +233,26 @@ LogLevel ERROR
                 with peer:
                     peer.settimeout(4)
                     self.assertEqual(peer.recv(8, socket.MSG_WAITALL), b"restored")
+            self.cli("-tunnel", "-stop", "-id", token)
+
+    def test_domain_name_real_ssh_forwarding(self):
+        self.cli("-host", "-add", "-domain", "SSH.EXAMPLE.TEST.")
+        with socket.socket() as target:
+            target.bind(("127.0.0.1", 0))
+            target.listen()
+            target.settimeout(4)
+            listen = unused_port()
+            result = self.cli("-tunnel", "-forward", "-domain", "ssh.example.test",
+                              "-listen", str(listen), "-target", "127.0.0.1",
+                              "-target-port", str(target.getsockname()[1]))
+            token = result.stdout.split()[0].split("=")[1]
+            self.assertIn("ssh.example.test", self.wait_state(token, "ready"))
+            with socket.create_connection(("127.0.0.1", listen), timeout=4) as client:
+                client.sendall(b"domain")
+                peer, _ = target.accept()
+                with peer:
+                    peer.settimeout(4)
+                    self.assertEqual(peer.recv(6, socket.MSG_WAITALL), b"domain")
+                    peer.sendall(b"ok")
+                    self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
             self.cli("-tunnel", "-stop", "-id", token)

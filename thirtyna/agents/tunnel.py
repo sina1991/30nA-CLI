@@ -1,5 +1,6 @@
 """Public Tunnel Agent CLI; operations execute in a private worker."""
 import ipaddress
+from thirtyna.address import host_address, is_domain
 
 from thirtyna.core import UsageError, parser
 from thirtyna.runtime.service import control, request
@@ -34,7 +35,9 @@ def run(argv):
     mode.add_argument("-reverse", action="store_true")
     mode.add_argument("-list", action="store_true")
     mode.add_argument("-stop", action="store_true")
-    cli.add_argument("-ip", metavar="REGISTERED_HOST")
+    endpoint = cli.add_mutually_exclusive_group()
+    endpoint.add_argument("-ip", metavar="REGISTERED_HOST", help="Registered IPv4, IPv6 or DNS name")
+    endpoint.add_argument("-domain", dest="ip", metavar="NAME", help="Alias for -ip")
     cli.add_argument("-listen", metavar="PORT")
     cli.add_argument("-target", metavar="ADDRESS")
     cli.add_argument("-target-port", metavar="PORT")
@@ -45,7 +48,7 @@ def run(argv):
         if args.id or not all((args.ip, args.listen, args.target, args.target_port)):
             raise UsageError("Tunnel requires -ip, -listen, -target and -target-port")
         parameters = dict(mode="forward" if args.forward else "reverse",
-                          host=address(args.ip), listen=port(args.listen),
+                          host=host_address(args.ip), listen=port(args.listen),
                           target=address(args.target), target_port=port(args.target_port),
                           restore=args.restore)
         operation = "start"
@@ -62,6 +65,8 @@ def run(argv):
     agent = control("ensure", "tunnel", bootstrap=True)
     if agent.get("tunnel_protocol") != 2:
         raise RuntimeError("Restart Service Agent before using this Tunnel release")
+    if operation == "start" and is_domain(parameters["host"]) and not agent.get("domain_support"):
+        raise RuntimeError("Restart Service Agent before using domain names")
     if agent.get("recovery_warning"):
         import sys
         print("30na: " + agent["recovery_warning"], file=sys.stderr)

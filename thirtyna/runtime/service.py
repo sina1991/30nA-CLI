@@ -350,6 +350,7 @@ class Supervisor:
             result.update(info, state="ready", last=reply["last"])
             if action != "ensure":
                 del result["key"]
+        result["domain_support"] = True
         if name == "tunnel":
             result["tunnel_protocol"] = 2
             if self.recovery_warning:

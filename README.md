@@ -2,7 +2,7 @@
 
 Tunnel Agent: `30na -tunnel -help` (OpenSSH Forward/Reverse, confirmed readiness, failure reporting, opt-in worker crash recovery). See [Tunnel documentation](docs/layer1-tunnel.md).
 
-ابزار شخصی Linux با Agentهای مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و اتصال با OpenSSH.
+ابزار شخصی Linux با Agentهای مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و نام دامنه‌ها و اتصال با OpenSSH.
 
 ## نصب از GitHub
 
@@ -73,3 +73,5 @@ clear
 [پذیرش و شواهد CI](docs/RELEASE_ACCEPTANCE.md) · [عیب‌یابی](docs/TROUBLESHOOTING_GUIDE.md) · [GitHub Actions](https://github.com/sina1991/30nA-CLI/actions)
 
 پیش از ارتقای نسخه، Service Agent فعال را مطابق راهنمای نصب متوقف کنید. این کار Sessionهای فعال را قطع می‌کند. بازیابی اختیاری فقط برای Crash شدن Tunnel Worker در طول عمر همان سرویس است.
+
+[راهنمای Domain Name و SSH Service](docs/DOMAIN_SSH_GUIDE.md)

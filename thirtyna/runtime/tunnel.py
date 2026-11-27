@@ -13,6 +13,7 @@ import tempfile
 import time
 
 from thirtyna.core import UsageError
+from thirtyna.address import host_address
 
 _TUNNELS = {}
 STARTUP_TIMEOUT = 12.0
@@ -28,7 +29,7 @@ _INTENTS = {}
 def _parameters(argument):
     try:
         mode = argument["mode"]
-        host = str(ipaddress.ip_address(argument["host"]))
+        host = host_address(argument["host"])
         target = str(ipaddress.ip_address(argument["target"]))
         listen = int(argument["listen"])
         target_port = int(argument["target_port"])
