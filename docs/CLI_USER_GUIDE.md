@@ -79,3 +79,18 @@ clear
 ```
 
 برای دسترسی به Calculator، System، Host، Tunnel، Files و Help از [راهنمای مرکز کنترل](TUI_GUIDE.md) استفاده کنید.
+
+## Systemd Service Agent
+
+```bash
+clear
+30na -service -help
+30na -service -active
+30na -service -list
+30na -service -installed
+30na -service -workers
+30na -service -status -unit ssh.service
+30na -service -logs -unit ssh.service
+```
+
+عملیات تغییر وضعیت را تنها با مجوز مناسب و پس از بررسی تأثیر آن روی اتصال SSH انجام دهید. [راهنمای Service Agent](SYSTEMD_SERVICE_GUIDE.md).

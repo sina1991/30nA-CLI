@@ -37,3 +37,5 @@ Mock SSH and real OpenSSH are distinct evidence. Live tests must use isolated cr
 Report only mission, branch, baseline/head SHA, changed files, observed tests/CI, unresolved limitations, PR URL and next action. Update the relevant docs when changing a contract. Never hard-code a stale branch SHA in agent instructions; query GitHub. Keep this entry point short and link to detailed docs rather than duplicating them.
 
 For TUI control-center changes, read `docs/TUI_GUIDE.md`, `thirtyna/menus/dashboard.py`, `tests/test_dashboard.py`. Delegate to the same release CLI without a shell; keep observed counts separate from command exit status. Preserve direct file manager and legacy numbered/Tk modes.
+
+For systemd operations use `thirtyna/agents/systemctl.py`, `docs/SYSTEMD_SERVICE_GUIDE.md`, `tests/test_systemctl.py`. This public agent is distinct from the internal supervisor. Never escalate automatically or mutate real services in tests. Dashboard regions live in `thirtyna/menus/panels.py`.

@@ -85,3 +85,5 @@ clear
 پیش از ارتقای نسخه، Service Agent فعال را مطابق راهنمای نصب متوقف کنید. این کار Sessionهای فعال را قطع می‌کند. بازیابی اختیاری فقط برای Crash شدن Tunnel Worker در طول عمر همان سرویس است.
 
 [راهنمای Domain Name و SSH Service](docs/DOMAIN_SSH_GUIDE.md)
+
+[راهنمای Systemd Service Agent](docs/SYSTEMD_SERVICE_GUIDE.md) · [Dashboard چندپنلی](docs/TUI_GUIDE.md)
