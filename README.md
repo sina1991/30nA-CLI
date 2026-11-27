@@ -2,13 +2,13 @@
 
 Tunnel Agent: `30na -tunnel -help` (OpenSSH Forward/Reverse, Host Agent authorization). See [Tunnel documentation](docs/layer1-tunnel.md).
 
-ابزار شخصی Linux با چهار Agent مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و اتصال با OpenSSH.
+ابزار شخصی Linux با Agentهای مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و اتصال با OpenSSH.
 
 ## نصب از GitHub
 
 ```bash
 clear
-git clone --branch feat/menu-interfaces https://github.com/sina1991/30nA-CLI.git
+git clone https://github.com/sina1991/30nA-CLI.git
 cd 30nA-CLI
 sudo ./install.sh
 ```
@@ -62,3 +62,8 @@ clear
 - [-sys](docs/switches/sys/README.md)
 - [-host](docs/switches/host/README.md)
 - [-menu](docs/switches/menu/README.md)
+- [-tunnel](docs/switches/tunnel/README.md)
+
+## شروع توسعه
+
+برای ورود سریع ایجنت‌های جدید، ابتدا [AGENTS.md](AGENTS.md) و [وضعیت توسعه](docs/DEVELOPMENT_STATUS.md) را بخوانید. سپس فقط فایل‌های مرتبط با مأموریت را بررسی کنید.
