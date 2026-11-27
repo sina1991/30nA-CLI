@@ -22,3 +22,8 @@ The authoritative state is the repository's current main SHA, merged PRs and act
 Tested platform: Linux Ubuntu 24.04 with Python 3.12 and isolated OpenSSH server on loopback. Other distributions, production endpoints, remote server policy and real network conditions are not certified. Ready confirms forwarding, not application reachability. Reverse listener exposure depends on remote GatewayPorts policy. Recovery is memory-only and opt-in; no recovery after reboot, Service restart or ordinary SSH failure. An abrupt Service Agent kill may leave a private temporary socket directory; it is never reused. User-owned SSH configuration and credentials are not managed by this project. CI runs automatically, but GitHub branch protection is a separate repository setting.
 
 New agents: start with [AGENTS.md](../AGENTS.md). Do not reload complete chat histories. Report only evidence, changes, constraints and the next action.
+
+
+## Operator smoke test, 2026-11-27
+
+Six VLESS/REALITY profiles traversed public listeners on the Iran controller and separate persistent SSH Forward tunnels to the UK host. The standalone Xray and curl check returned the expected UK egress from IPinfo in all six cases: TCP with Vision, TCP without Flow, gRPC, and XHTTP packet-up, stream-up and stream-one. The operator reported that all profiles also returned an IP on Windows, with intermittent availability. This evidence is a connectivity sample, not an uptime measurement. XHTTP and IPinfo acceptance are not built into the rc.8 Test Agent.
