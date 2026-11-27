@@ -12,3 +12,5 @@ python3 -m unittest discover -s tests -v
 ## CI و Tunnel
 
 Workflow در `.github/workflows/ci.yml` روی PR به main و Push به main، مجموعه کامل unittest را در Ubuntu اجرا می‌کند. نتیجه را برای SHA دقیق بررسی کنید. وجود Workflow به‌تنهایی به معنی اجرای موفق نیست. تست‌های Mock و Real SSH جدا هستند. CI با THIRTYNA_REAL_SSH=1 و نصب openssh-server یک sshd ایزوله روی Loopback با کلید موقت اجرا می‌کند. برای اجرای محلی Real SSH به کاربر غیر root، sudo بدون رمز برای sshd آزمایشی و مسیر /run/sshd نیاز است. بدون opt-in، تست‌های Real SSH با Skip مشخص می‌شوند. برای تست محلی از همان دستور بالا استفاده کنید.
+
+تست‌های Recovery علاوه بر حالت پیش‌فرض بدون بازیابی، Opt-in، لغو بازیابی پس از توقف صریح، لغو مجوز Host، درخواست‌های هم‌زمان و انتقال داده واقعی بعد از Crash را بررسی می‌کنند. اجرای CI باید بدون Skip باشد. برای ارتقا از نسخه‌ای با Service Agent قدیمی، ابتدا سرویس را متوقف کنید؛ این کار Sessionهای فعال را قطع می‌کند.

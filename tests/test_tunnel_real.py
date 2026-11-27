@@ -7,6 +7,7 @@ import getpass
 import os
 from pathlib import Path
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -33,7 +34,6 @@ class RealTunnelTests(unittest.TestCase):
         self.root = Path(tmp.name)
         self.env = dict(os.environ, XDG_DATA_HOME=str(self.root),
                         PATH=str(self.root) + os.pathsep + os.environ["PATH"])
-        self.addCleanup(self.shutdown)
         self.user = getpass.getuser()
         if os.getuid() == 0:
             self.fail("Run the real SSH fixture as a non-root user with sudo")
@@ -70,6 +70,7 @@ LogLevel ERROR
         daemon = subprocess.Popen(["sudo", "-n", sshd, "-D", "-e", "-f", str(config)],
                                   stdin=subprocess.DEVNULL, stdout=log, stderr=log)
         self.addCleanup(self.stop_daemon, daemon)
+        self.addCleanup(self.shutdown)
         deadline = time.monotonic() + 5
         while time.monotonic() < deadline:
             if daemon.poll() is not None:
@@ -125,9 +126,10 @@ LogLevel ERROR
             self.assertEqual(result.returncode, code, result.stderr)
         return result
 
-    def start(self, mode, listen, target, code=0):
+    def start(self, mode, listen, target, code=0, restore=False):
         return self.cli("-tunnel", "-" + mode, "-ip", "127.0.0.1", "-listen", str(listen),
-                        "-target", "127.0.0.1", "-target-port", str(target), code=code)
+                        "-target", "127.0.0.1", "-target-port", str(target),
+                        *(["-restore"] if restore else []), code=code)
 
     def wait_state(self, token, state):
         deadline = time.monotonic() + 14
@@ -191,3 +193,36 @@ LogLevel ERROR
                 with socket.create_connection(blocker.getsockname(), timeout=4):
                     conn, _ = blocker.accept()
                     conn.close()
+
+    def test_opted_in_worker_crash_restores_real_data_transfer(self):
+        from unittest.mock import patch
+        from thirtyna.runtime.service import control
+        with socket.socket() as target:
+            target.bind(("127.0.0.1", 0))
+            target.listen()
+            target.settimeout(4)
+            listen = unused_port()
+            result = self.start("forward", listen, target.getsockname()[1], restore=True)
+            token = result.stdout.split()[0].split("=")[1]
+            before = self.wait_state(token, "ready")
+            old_pid = next(s for s in before.split() if s.startswith("pid="))
+            with patch.dict(os.environ, self.env):
+                worker = control("status", "tunnel")["pid"]
+            os.kill(worker, signal.SIGKILL)
+            deadline = time.monotonic() + 14
+            while time.monotonic() < deadline:
+                listing = self.cli("-tunnel", "-list").stdout
+                if token in listing and "state=failed" in listing:
+                    self.fail(listing)
+                if token in listing and "state=ready" in listing and old_pid not in listing:
+                    break
+                time.sleep(0.1)
+            else:
+                self.fail("opted-in real tunnel did not recover")
+            with socket.create_connection(("127.0.0.1", listen), timeout=4) as client:
+                client.sendall(b"restored")
+                peer, _ = target.accept()
+                with peer:
+                    peer.settimeout(4)
+                    self.assertEqual(peer.recv(8, socket.MSG_WAITALL), b"restored")
+            self.cli("-tunnel", "-stop", "-id", token)

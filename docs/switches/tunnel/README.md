@@ -12,3 +12,5 @@ clear
 ```
 
 Requires a registered Host and non-interactive OpenSSH authentication. `-list` reports `state=starting`, `state=ready` (OpenSSH forwarding confirmation, not target reachability), or `state=failed` with a reason. `-stop` removes active and failed entries. No dynamic forwarding.
+
+Optional `-restore` enables bounded automatic restoration after a Tunnel Worker crash, with Host reauthorization and the same tunnel ID. Default is off. Explicit stop or service shutdown discards recovery intent. See the lifecycle policy in the architecture guide.

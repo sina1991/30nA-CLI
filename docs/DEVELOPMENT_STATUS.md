@@ -7,8 +7,8 @@
 | CLI Discovery، Calculator، System، Menu | پیاده‌سازی‌شده |
 | Host Agent / Service Agent / Port Agent | ادغام‌شده در PR #3 |
 | Tunnel Agent Integration | ادغام‌شده در PR #4 با پذیرش مشروط |
-| Tunnel Startup Readiness & Failure Reporting | پیاده‌سازی پیشنهادی؛ نتیجه CI جدید را بررسی کنید |
-| Session Restoration Policy | باز؛ بدون بازیابی خودکار در نسخه فعلی |
+| Tunnel Startup Readiness & Failure Reporting | ادغام‌شده در PR #6؛ CI 35/35 موفق |
+| Session Restoration Policy | پیاده‌سازی Opt-in؛ نتیجه CI این تغییر را بررسی کنید |
 | CI Automation | ادغام‌شده در PR #5؛ CI اولیه 27/27 موفق |
 | Final Integration & Acceptance | باز |
 
@@ -16,8 +16,9 @@
 - PR #3: گزارش 19/19 تست موفق.
 - PR #4: گزارش 27/27 تست موفق (8 Integration، 19 Regression)، و Forward/Reverse و انتقال داده با OpenSSH واقعی در محیط Loopback ایزوله.
 - تست‌های Tunnel شامل Mock و Real SSH اختیاری هستند؛ CI اجرای Real SSH را فعال می‌کند. نتیجه تاریخی جایگزین تست Commit جدید نیست.
-- پذیرش PR #4 مشروط بود: وضعیت starting اثبات آمادگی اتصال نیست؛ خطای تأخیری احراز هویت تأیید نشده؛ Session پس از Crash بازیابی نمی‌شود؛ OpenSSH مالک پورت‌های Forwarding است.
+- PR #6: 35/35 تست موفق شامل 13 Mock و 3 Real SSH؛ Readiness با پاسخ OpenSSH تأیید می‌شود.
+- پذیرش تاریخی PR #4 مشروط بود: وضعیت starting اثبات آمادگی اتصال نیست؛ خطای تأخیری احراز هویت تأیید نشده؛ Session پس از Crash بازیابی نمی‌شود؛ OpenSSH مالک پورت‌های Forwarding است.
 - تقدم Commit/Push بر Regression در مأموریت قبلی انحراف ثبت‌شده بود. تست‌های بعدی روی SHA نهایی طبق گزارش موفق بودند.
 
 ## ترتیب ادامه
-ابتدا CI برای اعتبارسنجی تغییرات؛ سپس Readiness و گزارش خطا، سیاست Session Restoration، بررسی امنیت/پایداری و تست واقعی OpenSSH، و پذیرش نهایی. بعد از تغییر قراردادها مستندات CLI و معماری را به‌روز کنید. راهنمای فشرده ایجنت‌ها: [AGENTS.md](../AGENTS.md).
+CI و Readiness ادغام شده‌اند. بازیابی محدود بعد از Crash، رفع ریسک هم‌زمانی IPC و تست تکمیلی در تغییر جدید؛ پذیرش نهایی وابسته به CI و وضعیت GitHub است. بعد از تغییر قراردادها مستندات CLI و معماری را به‌روز کنید. راهنمای فشرده ایجنت‌ها: [AGENTS.md](../AGENTS.md).

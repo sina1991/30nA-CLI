@@ -39,33 +39,43 @@ def run(argv):
     cli.add_argument("-target", metavar="ADDRESS")
     cli.add_argument("-target-port", metavar="PORT")
     cli.add_argument("-id", metavar="TUNNEL_ID")
+    cli.add_argument("-restore", action="store_true", help="Opt in to worker-crash restoration")
     args = cli.parse_args(argv)
     if args.forward or args.reverse:
         if args.id or not all((args.ip, args.listen, args.target, args.target_port)):
             raise UsageError("Tunnel requires -ip, -listen, -target and -target-port")
         parameters = dict(mode="forward" if args.forward else "reverse",
                           host=address(args.ip), listen=port(args.listen),
-                          target=address(args.target), target_port=port(args.target_port))
+                          target=address(args.target), target_port=port(args.target_port),
+                          restore=args.restore)
         operation = "start"
     elif args.stop:
-        if not args.id or any((args.ip, args.listen, args.target, args.target_port)):
+        if not args.id or any((args.ip, args.listen, args.target, args.target_port, args.restore)):
             raise UsageError("Use -stop -id TUNNEL_ID")
         parameters = {"id": args.id}
         operation = "stop"
     else:
-        if any((args.ip, args.listen, args.target, args.target_port, args.id)):
+        if any((args.ip, args.listen, args.target, args.target_port, args.id, args.restore)):
             raise UsageError("-list takes no additional options")
         parameters = None
         operation = "list"
     agent = control("ensure", "tunnel", bootstrap=True)
+    if agent.get("tunnel_protocol") != 2:
+        raise RuntimeError("Restart Service Agent before using this Tunnel release")
+    if agent.get("recovery_warning"):
+        import sys
+        print("30na: " + agent["recovery_warning"], file=sys.stderr)
     result = request(agent, operation, parameters)["value"]
     if operation == "list":
         for row in result:
             line = "{id} {mode} {host} {listen} {target}:{target_port} pid={pid} state={state}".format(**row)
             if row.get("reason"):
                 line += " reason=" + row["reason"]
+            if row.get("restore"):
+                line += " restore=on"
             print(line)
     elif operation == "start":
-        print("id={id} pid={pid} state={state}".format(**result))
+        print("id={id} pid={pid} state={state}".format(**result) +
+              (" restore=on" if result.get("restore") else ""))
     else:
         print("stopped " + result["id"])

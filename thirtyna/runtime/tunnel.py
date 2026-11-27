@@ -1,7 +1,9 @@
 """Private Tunnel worker; only Host IPC authorizes SSH destinations."""
 import ctypes
 import ipaddress
+import json
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -17,6 +19,132 @@ STARTUP_TIMEOUT = 12.0
 INITIAL_WAIT = 0.7
 MAX_ACTIVE = 32
 MAX_FAILED = 64
+_RECOVERY_FD = None
+_SOCKET_ROOT = None
+_HOST = None
+_INTENTS = {}
+
+
+def _parameters(argument):
+    try:
+        mode = argument["mode"]
+        host = str(ipaddress.ip_address(argument["host"]))
+        target = str(ipaddress.ip_address(argument["target"]))
+        listen = int(argument["listen"])
+        target_port = int(argument["target_port"])
+        if mode not in ("forward", "reverse") or not 1 <= listen <= 65535 or not 1 <= target_port <= 65535:
+            raise ValueError("Invalid tunnel parameters")
+        return dict(mode=mode, host=host, target=target, listen=listen, target_port=target_port)
+    except (KeyError, TypeError, ValueError) as exc:
+        raise UsageError("Invalid tunnel parameters") from exc
+
+
+def set_host(info):
+    global _HOST
+    _HOST = info
+
+
+def _authorize(host):
+    from thirtyna.runtime.service import request
+    if _HOST is None:
+        raise RuntimeError("Host Agent unavailable")
+    try:
+        request(_HOST, "exists", host, timeout=1)
+    except (OSError, RuntimeError) as exc:
+        raise RuntimeError("Host Agent unavailable") from exc
+
+
+def _save_intents():
+    # Truncate before writing: interrupted writes fail closed, never fall back to
+    # an older journal which could restore an explicitly stopped session.
+    try:
+        os.ftruncate(_RECOVERY_FD, 0)
+        if _INTENTS:
+            raw = json.dumps(_INTENTS, separators=(",", ":")).encode()
+            if os.pwrite(_RECOVERY_FD, raw, 0) != len(raw):
+                raise OSError("Short recovery journal write")
+    except OSError as exc:
+        _INTENTS.clear()
+        os.ftruncate(_RECOVERY_FD, 0)
+        raise RuntimeError("Recovery journal write failed") from exc
+
+
+def _record(item):
+    info = item["info"]
+    _INTENTS[info["id"]] = _parameters(info)
+    _save_intents()
+
+
+def _forget(token):
+    if token in _INTENTS:
+        del _INTENTS[token]
+        _save_intents()
+
+
+def initialize(recovery_fd, directory, host_info):
+    global _RECOVERY_FD, _SOCKET_ROOT
+    _RECOVERY_FD = recovery_fd
+    _SOCKET_ROOT = directory
+    set_host(host_info)
+    os.set_inheritable(recovery_fd, False)
+    size = os.fstat(recovery_fd).st_size
+    if not size:
+        return
+    # Consume old intent before any attempt. Re-arm only confirmed ready sessions.
+    raw = os.pread(recovery_fd, min(size, 65536), 0)
+    os.ftruncate(recovery_fd, 0)
+    try:
+        records = json.loads(raw)
+        if size > 65536 or not isinstance(records, dict) or len(records) > MAX_ACTIVE:
+            raise ValueError("Invalid recovery journal")
+        validated = {}
+        for token, spec in records.items():
+            if not re.fullmatch(r"[0-9a-f]{24}", token):
+                raise ValueError("Invalid tunnel id")
+            validated[token] = _parameters(spec)
+    except (TypeError, ValueError):
+        # Crash in the middle of a journal write: discard, never start unknown data.
+        return
+    for token, spec in validated.items():
+        _TUNNELS[token] = dict(info=dict(id=token, **spec, pid=0, state="starting",
+                                         restore=True), pending=True,
+                               retry_after=time.monotonic() + 0.5)
+
+
+def _launch(token, parameters, restore):
+    directory = tempfile.mkdtemp(prefix="s-", dir=_SOCKET_ROOT)
+    item = dict(directory=directory, socket=os.path.join(directory, "s"),
+                master=None, forward=None, master_log=None, forward_log=None,
+                deadline=time.monotonic() + STARTUP_TIMEOUT)
+    try:
+        item["master_log"] = tempfile.TemporaryFile(mode="w+b")
+        argv = ["ssh", "-M", "-S", item["socket"], "-N", "-T",
+                "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
+                "-o", "ConnectTimeout=5", "-o", "ControlPersist=no",
+                "-o", "ForkAfterAuthentication=no", "-o", "ClearAllForwardings=yes",
+                "-o", "GatewayPorts=no", "-o", "PermitLocalCommand=no",
+                "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
+                "-o", "LogLevel=ERROR", "--", parameters["host"]]
+        item["master"] = _spawn(argv, item["master_log"])
+        item["info"] = dict(id=token, **parameters, pid=item["master"].pid,
+                            state="starting", restore=restore)
+        return item
+    except BaseException:
+        _release([item])
+        raise
+
+
+def _restore_pending(token, item):
+    try:
+        spec = _parameters(item["info"])
+        _authorize(spec["host"])
+        _TUNNELS[token] = _launch(token, spec, True)
+    except UsageError:
+        item["pending"] = False
+        _fail(item, "host_not_registered")
+    except (RuntimeError, OSError):
+        item["pending"] = False
+        _fail(item, "restoration_start_failed")
 
 
 def _parent_guard(parent):
@@ -72,7 +200,10 @@ def cleanup():
 
 
 def _remove(token):
-    _release([_TUNNELS.pop(token)])
+    try:
+        _forget(token)
+    finally:
+        _release([_TUNNELS.pop(token)])
 
 
 def _diagnose(log, default):
@@ -93,6 +224,10 @@ def _diagnose(log, default):
 
 
 def _fail(item, reason):
+    try:
+        _forget(item["info"]["id"])
+    except RuntimeError:
+        reason = "restoration_storage_failed"
     item["info"].update(state="failed", reason=reason)
     _release([item])
 
@@ -111,9 +246,15 @@ def _forward(item):
 
 
 def tick():
-    for item in list(_TUNNELS.values()):
+    restored = False
+    for token, item in list(_TUNNELS.items()):
         state = item["info"]["state"]
         if state == "failed":
+            continue
+        if item.get("pending"):
+            if not restored and time.monotonic() >= item["retry_after"]:
+                _restore_pending(token, item)
+                restored = True
             continue
         master = item["master"]
         if master.poll() is not None:
@@ -127,6 +268,12 @@ def tick():
                     item["forward_log"].close()
                     item["forward_log"] = None
                     item["forward"] = None
+                    if item["info"]["restore"]:
+                        try:
+                            _record(item)
+                        except RuntimeError:
+                            _fail(item, "restoration_storage_failed")
+                            continue
                     item["info"]["state"] = "ready"
                 elif code is not None:
                     reason = _diagnose(item["forward_log"], "forwarding_rejected")
@@ -164,41 +311,17 @@ def handle(folder, op, argument):
         return {"id": token}
     if op != "start" or not isinstance(argument, dict):
         raise UsageError("Unknown tunnel operation")
-    try:
-        mode = argument["mode"]
-        host = str(ipaddress.ip_address(argument["host"]))
-        target = str(ipaddress.ip_address(argument["target"]))
-        listen = int(argument["listen"])
-        target_port = int(argument["target_port"])
-        if mode not in ("forward", "reverse") or not 1 <= listen <= 65535 or not 1 <= target_port <= 65535:
-            raise ValueError("Invalid tunnel parameters")
-    except (KeyError, TypeError, ValueError) as exc:
-        raise UsageError("Invalid tunnel parameters") from exc
-
-    from thirtyna.runtime.service import control, request
-    request(control("ensure", "host", bootstrap=True), "exists", host)
+    parameters = _parameters(argument)
+    restore = argument.get("restore", False)
+    if not isinstance(restore, bool):
+        raise UsageError("Invalid restoration option")
+    _authorize(parameters["host"])
     if sum(item["info"]["state"] != "failed" for item in _TUNNELS.values()) >= MAX_ACTIVE:
         raise UsageError("Too many active tunnels")
 
     token = secrets.token_hex(12)
-    # Short absolute path for AF_UNIX; mkdtemp is private (0700).
-    directory = tempfile.mkdtemp(prefix="30na-t-", dir="/tmp")
-    item = dict(directory=directory, socket=os.path.join(directory, "s"),
-                master=None, forward=None, master_log=None, forward_log=None,
-                deadline=time.monotonic() + STARTUP_TIMEOUT)
     try:
-        item["master_log"] = tempfile.TemporaryFile(mode="w+b")
-        argv = ["ssh", "-M", "-S", item["socket"], "-N", "-T",
-                "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
-                "-o", "ConnectTimeout=5", "-o", "ControlPersist=no",
-                "-o", "ForkAfterAuthentication=no", "-o", "ClearAllForwardings=yes",
-                "-o", "GatewayPorts=no", "-o", "PermitLocalCommand=no",
-                "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
-                "-o", "LogLevel=ERROR", "--", host]
-        item["master"] = _spawn(argv, item["master_log"])
-        item["info"] = dict(id=token, mode=mode, host=host, listen=listen,
-                            target=target, target_port=target_port,
-                            pid=item["master"].pid, state="starting")
+        item = _launch(token, parameters, restore)
         _TUNNELS[token] = item
         # Preserve prompt CLI response and immediate failures, but never infer readiness.
         deadline = time.monotonic() + INITIAL_WAIT
@@ -218,8 +341,6 @@ def handle(folder, op, argument):
     except BaseException as exc:
         if token in _TUNNELS:
             _remove(token)
-        else:
-            _release([item])
         if isinstance(exc, OSError):
             raise RuntimeError("Could not launch OpenSSH tunnel") from exc
         raise
