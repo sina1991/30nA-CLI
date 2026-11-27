@@ -62,7 +62,8 @@ while True:
                 with contextlib.redirect_stdout(io.StringIO()):
                     status = agent.run(["-profiles", str(profiles), "-xray", str(xray),
                                         "-ids", "2", "-count", "2", "-interval", "0",
-                                        "-output", str(root / "reports")])
+                                        "-output", str(root / "reports"),
+                                        "-history", str(root / "history.sqlite")])
             self.assertEqual(status, 0)
             directory = next((root / "reports").iterdir())
             records = json.loads((directory / "summary.json").read_text())

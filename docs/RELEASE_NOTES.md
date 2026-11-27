@@ -1,6 +1,6 @@
-# 30nA-CLI v1.0.0-rc.6
+# 30nA-CLI v1.0.0-rc.7
 
-Sixth release candidate for Ubuntu terminal server management. Host addition now installs the application and Ubuntu prerequisites on the target before registration, with a downgrade guard.
+Seventh release candidate for Ubuntu terminal server management. Host addition now installs the application and Ubuntu prerequisites on the target before registration, with a downgrade guard.
 
 - Host enrollment verifies management public-key access before registration and configures ordinary SSH login from the controller.
 - Forward and Reverse use registered hosts and operator-selected TCP ports.
@@ -19,3 +19,7 @@ When ~/30na-SSH-Backup.zip is present on the controller, adding a Host transfers
 Loopback Reverse selects the single globally routable assigned IPv4 when Docker bridge addresses are also present, preserving loopback listeners for chained tunnels.
 
 The new 30na -test agent runs separate VLESS TCP/RAW profile measurements using an existing local Xray-core binary. It supports all or selected profiles, route labels, configurable repetition/size/timeouts and ranked CSV/JSON/Markdown reports.
+
+The profile Test Agent adds VMess, Trojan and Shadowsocks share links, compatible WebSocket/gRPC transports, protocol filtering and success-rate/download-range report fields. Existing VLESS selections and input files remain usable.
+
+Persistent test history and three rolling classifications are added. Successful profiles, reserve/evaluating profiles and unreliable profiles are recalculated from recent observations. The default 24-hour policy is configurable, with 1h/24h/7d summaries and selection by list.

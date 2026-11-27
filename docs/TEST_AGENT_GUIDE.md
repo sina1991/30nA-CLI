@@ -1,8 +1,8 @@
-# VLESS Test Agent
+# Proxy Profile Test Agent
 
-The first Test Agent release measures the VLESS profiles stored on the current controller. Xray-core and curl must be installed. The existing private Xray binary at ~/vless-bench/bin/xray and profile file ~/vless-bench/profiles.txt are the defaults.
+The Test Agent measures VLESS, VMess, Trojan and Shadowsocks profiles stored on the current controller. Xray-core and curl must be installed. The existing private Xray binary at ~/vless-bench/bin/xray and profile file ~/vless-bench/profiles.txt are the defaults.
 
-Supported profiles use VLESS over TCP/RAW with REALITY, TLS or no transport security. Unsupported profiles receive CONFIG_ERROR.
+Supported share links are vless://, legacy base64-JSON vmess://, trojan:// and SIP002/legacy ss://. TCP/RAW, WebSocket and gRPC transports are supported with compatible TLS settings. VLESS also supports REALITY over TCP/RAW or gRPC. Shadowsocks plugins, TCP HTTP-header obfuscation and native UDP protocols are reported as unsupported. Each endpoint must have a matching inbound configured by the operator. Native UDP paths require a separate transport design from the existing SSH TCP tunnels.
 
 ## Run all or selected profiles
 
@@ -13,10 +13,10 @@ clear
 
 ```bash
 clear
-30na -test -vless -all
+30na -test -all
 ```
 
-Profile IDs follow the VLESS links in file order, starting at 1.
+Profile IDs follow all share links in file order, starting at 1.
 
 ```bash
 clear
@@ -27,12 +27,12 @@ clear
 
 ```bash
 clear
-30na -test -vless -all -count 3 -bytes 10000000 -timeout 60 -connect-timeout 10 -interval 1
+30na -test -all -count 3 -bytes 10000000 -timeout 60 -connect-timeout 10 -interval 1
 ```
 
 | Option | Meaning |
 | --- | --- |
-| -profiles FILE | Input file containing VLESS links |
+| -profiles FILE | Input file containing supported share links |
 | -ids 1,3,7 | Selected profile numbers |
 | -all | All profiles, also the default |
 | -count N | Attempts per profile, 1 through 100 |
@@ -76,3 +76,86 @@ An execution-specific directory under ~/vless-bench/reports contains summary.csv
 Ranking orders profiles by successful attempt count, then median download speed. TCP/RAW measurements use independent sequential downloads. They reflect the current controller's route to the test endpoint.
 
 Keep profile files and diagnostic logs private. Share summary.csv or report.md for comparison. Exit status is 0 when every selected profile passes every attempt, 1 when a profile fails, 2 for invalid options and 130 for interruption.
+
+
+## Compare protocols
+
+Put each complete share link on its own line in the existing profiles file. Profile IDs follow file order across all protocols. Filtering preserves these original IDs.
+
+```bash
+clear
+30na -test -all -count 5
+```
+
+```bash
+clear
+30na -test -protocol trojan -count 5
+```
+
+```bash
+clear
+30na -test -protocol vmess -ids 2,4 -bytes 25000000
+```
+
+The -vless flag remains a VLESS-only selector. -protocol accepts all, vless, vmess, trojan and ss. Reports include protocol, a credential-free parse-failure reason, successful-run percentage, minimum/maximum download speed, median download speed and median TTFB. Test the same inbound through each intended route to compare paths, and use matching separate inbounds to compare protocols.
+
+
+## Persistent catalog and three lists
+
+History is stored on the controller at ~/.local/state/30na/tests/history.sqlite, respecting XDG_STATE_HOME. The database contains credential-free observations and a SHA-256 identity derived from each canonical client configuration. Changing a profile name preserves identity. Changing its authentication or transport configuration starts a separate history. The input share links stay in the operator's private profiles file.
+
+Each completed profile is saved transactionally. A run/profile pair has one observation, making repeated recording idempotent. The database retains previous observations. All three lists are exported atomically in catalog.json beside the database and a snapshot is saved with every completed report.
+
+```bash
+clear
+30na -test -lists
+```
+
+```bash
+clear
+30na -test -all -count 3
+```
+
+```bash
+clear
+30na -test -list 1
+```
+
+```bash
+clear
+30na -test -list 3 -count 5
+```
+
+The three lists are:
+
+1. Recommended profiles with sufficient history, at least 95% successful attempts, failure rate at or below the fleet's weighted failure rate, and median speed at or above the fleet median.
+2. Reserve/evaluating profiles. New profiles remain here until three separate test batches have been recorded. Profiles with no observations in the selected window are marked STALE.
+3. Unreliable profiles with sufficient history and success below 70%, or failure more than 15 percentage points above the fleet's weighted failure rate. Invalid/unsupported configurations are explicitly marked here without entering the fleet comparison.
+
+The default classification window is 24 hours. Each entry also exposes 1h, 24h and 7d aggregates. Rates use successful attempts divided by requested attempts. Download medians use individual successful samples. Speed cohorts are separated by requested download size, so use the same -bytes setting when comparing profiles or viewing their lists.
+
+```bash
+clear
+30na -test -lists -window 168 -min-runs 3 -bytes 10000000
+```
+
+To change the success/failure thresholds, provide a JSON policy:
+
+```json
+{
+  "good_success": 0.95,
+  "bad_success": 0.70,
+  "failure_margin": 0.15
+}
+```
+
+```bash
+clear
+30na -test -all -policy /root/vless-bench/policy.json
+```
+
+-list filters the current input file by its stored classification. Lists are recomputed after tests and whenever -lists is called. The source of each measurement is the current controller. Traffic routing and server inbound creation are operator actions.
+
+Include the history database in rebuild backups using SQLite's backup API when tests may be writing concurrently.
+
+A validated -policy file is saved as policy.json beside the history database and automatically reused by subsequent invocations. Window and minimum-run flags remain explicit invocation settings.

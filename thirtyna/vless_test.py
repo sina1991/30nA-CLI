@@ -13,6 +13,7 @@ import time
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from thirtyna.core import UsageError
+from thirtyna.profile_links import normalize, outbound
 
 DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
 
@@ -20,16 +21,18 @@ DOWNLOAD_URL = "https://speed.cloudflare.com/__down"
 def load_profiles(path):
     profiles = []
     for line_number, line in enumerate(path.read_text().splitlines(), 1):
-        for link in re.findall(r"vless://[^\s]+", line):
+        for link in re.findall(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s]+", line):
             profiles.append(dict(id=len(profiles) + 1, line=line_number,
                                  link=link.rstrip("'\"`")))
     if not profiles:
-        raise UsageError("No vless:// profiles found in " + str(path))
+        raise UsageError("No profile links found in " + str(path))
     return profiles
 
 
 def config_for(link, port):
-    uri = urlsplit(link)
+    uri = urlsplit(normalize(link))
+    if uri.scheme not in ("vless", "vmess", "trojan", "ss"):
+        raise ValueError("UNSUPPORTED_PROTOCOL")
     query = parse_qs(uri.query, keep_blank_values=True)
 
     def value(name, default=""):
@@ -37,19 +40,26 @@ def config_for(link, port):
 
     if not uri.hostname or not uri.port or not uri.username:
         raise ValueError("INVALID_LINK")
-    if value("type", "tcp").lower() not in ("tcp", "raw"):
+    network = value("type", "tcp").lower()
+    if network not in ("tcp", "raw", "ws", "grpc"):
         raise ValueError("UNSUPPORTED_TRANSPORT")
     if value("headerType", "none") not in ("", "none"):
         raise ValueError("UNSUPPORTED_HEADER")
-    if value("encryption", "none") not in ("", "none"):
-        raise ValueError("UNSUPPORTED_ENCRYPTION")
-    security = value("security", "none").lower()
+    security = value("security", "tls" if uri.scheme == "trojan" else "none").lower()
     if security not in ("none", "tls", "reality"):
         raise ValueError("UNSUPPORTED_SECURITY")
-    user = dict(id=unquote(uri.username), encryption="none")
-    if value("flow"):
-        user["flow"] = value("flow")
-    stream = dict(network="tcp", security=security)
+    if security == "reality" and (uri.scheme != "vless" or network == "ws"):
+        raise ValueError("UNSUPPORTED_REALITY_COMBINATION")
+    stream = dict(network="tcp" if network == "raw" else network, security=security)
+    if network == "ws":
+        stream["wsSettings"] = {"path": value("path", "/"), "headers": {}}
+        if value("host"):
+            stream["wsSettings"]["headers"]["Host"] = value("host")
+    if network == "grpc":
+        stream["grpcSettings"] = dict(serviceName=value("serviceName"),
+                                      multiMode=value("mode") == "multi")
+        if value("authority", value("host")):
+            stream["grpcSettings"]["authority"] = value("authority", value("host"))
     if security == "reality":
         if not value("pbk") or not value("sni"):
             raise ValueError("MISSING_REALITY_PARAMETER")
@@ -57,21 +67,18 @@ def config_for(link, port):
             serverName=value("sni"), fingerprint=value("fp", "chrome"),
             password=value("pbk"), shortId=value("sid"), spiderX=value("spx", "/"))
     elif security == "tls":
-        tls = dict(serverName=value("sni", uri.hostname))
+        tls = dict(serverName=value("sni", value("host", uri.hostname)))
         if value("fp"):
             tls["fingerprint"] = value("fp")
         if value("alpn"):
             tls["alpn"] = value("alpn").split(",")
-        tls["allowInsecure"] = value("allowInsecure", "0").lower() in ("1", "true")
+        tls["allowInsecure"] = value("allowInsecure", value("insecure", "0")).lower() in ("1", "true")
         stream["tlsSettings"] = tls
     config = {
         "log": {"loglevel": "warning"},
         "inbounds": [{"listen": "127.0.0.1", "port": port, "protocol": "socks",
                       "settings": {"auth": "noauth", "udp": False}}],
-        "outbounds": [{"protocol": "vless",
-                       "settings": {"vnext": [{"address": uri.hostname, "port": uri.port,
-                                                "users": [user]}]},
-                       "streamSettings": stream}],
+        "outbounds": [outbound(uri, value, stream)],
     }
     endpoint = f"{uri.hostname}:{uri.port}"
     label = " ".join(unquote(uri.fragment).split()) or endpoint
@@ -100,9 +107,11 @@ def stop_client(process):
 
 def measure_profile(profile, args, directory, routes):
     name = f"profile-{profile['id']:03d}"
-    summary = dict(profile=name, source_line=profile["line"], label="", endpoint="",
+    summary = dict(profile=name, source_line=profile["line"],
+                   protocol=profile["link"].split(":", 1)[0], reason="", label="", endpoint="",
                    route="", status="FAILED", successful_runs=0, requested_runs=args.count,
-                   median_download_Mbps=None, median_ttfb_ms=None)
+                   median_download_Mbps=None, median_ttfb_ms=None,
+                   success_percent=0, min_download_Mbps=None, max_download_Mbps=None)
     samples = []
     process = None
     try:
@@ -136,7 +145,7 @@ def measure_profile(profile, args, directory, routes):
                 for attempt in range(1, args.count + 1):
                     if process.poll() is not None or not owns_listener(process.pid, port):
                         raise RuntimeError("CLIENT_EXITED")
-                    row = dict(profile=name, endpoint=endpoint, route=route, run=attempt, status="FAILED", curl_exit=None,
+                    row = dict(profile=name, protocol=summary["protocol"], endpoint=endpoint, route=route, run=attempt, status="FAILED", curl_exit=None,
                                http=None, download_bytes=None, ttfb_ms=None,
                                total_s=None, download_Mbps=None)
                     try:
@@ -169,8 +178,14 @@ def measure_profile(profile, args, directory, routes):
                           f"TTFB={row['ttfb_ms']} ms", flush=True)
                     if attempt < args.count:
                         time.sleep(args.interval)
-    except ValueError:
+    except ValueError as exc:
         summary["status"] = "CONFIG_ERROR"
+        known = {"INVALID_BASE64", "INVALID_VMESS_LINK", "UNSUPPORTED_PROTOCOL",
+                 "INVALID_LINK", "UNSUPPORTED_ENCRYPTION", "UNSUPPORTED_SS_PLUGIN",
+                 "INVALID_SS_LINK", "UNSUPPORTED_TRANSPORT", "UNSUPPORTED_HEADER",
+                 "UNSUPPORTED_SECURITY", "UNSUPPORTED_REALITY_COMBINATION",
+                 "MISSING_REALITY_PARAMETER"}
+        summary["reason"] = str(exc) if str(exc) in known else "INVALID_PROFILE"
     except RuntimeError as exc:
         summary["status"] = str(exc)
     except subprocess.TimeoutExpired:
@@ -181,19 +196,23 @@ def measure_profile(profile, args, directory, routes):
         stop_client(process)
     valid = [row for row in samples if row["status"] == "OK"]
     summary["successful_runs"] = len(valid)
+    summary["success_percent"] = round(100 * len(valid) / args.count, 2)
     if summary["status"] == "FAILED":
         summary["status"] = "OK" if len(valid) == args.count else "PARTIAL" if valid else "FAILED"
     if valid:
         summary["median_download_Mbps"] = statistics.median(row["download_Mbps"] for row in valid)
+        summary["min_download_Mbps"] = min(row["download_Mbps"] for row in valid)
+        summary["max_download_Mbps"] = max(row["download_Mbps"] for row in valid)
         summary["median_ttfb_ms"] = statistics.median(row["ttfb_ms"] for row in valid)
     return summary, samples
 
 
 def write_reports(directory, summaries, details):
     fields = {
-        "summary": ["profile", "source_line", "label", "endpoint", "route", "status",
-                    "successful_runs", "requested_runs", "median_download_Mbps", "median_ttfb_ms"],
-        "details": ["profile", "endpoint", "route", "run", "status", "curl_exit",
+        "summary": ["profile", "source_line", "protocol", "reason", "label", "endpoint", "route", "status",
+                    "successful_runs", "requested_runs", "median_download_Mbps", "median_ttfb_ms",
+                    "success_percent", "min_download_Mbps", "max_download_Mbps"],
+        "details": ["profile", "protocol", "endpoint", "route", "run", "status", "curl_exit",
                     "http", "download_bytes", "ttfb_ms", "total_s", "download_Mbps"],
     }
     for name, rows in (("summary", summaries), ("details", details)):
@@ -205,12 +224,12 @@ def write_reports(directory, summaries, details):
     ranked = sorted(summaries, key=lambda row: (
         -row["successful_runs"], -(row["median_download_Mbps"] or 0),
         row["median_ttfb_ms"] if row["median_ttfb_ms"] is not None else float("inf")))
-    lines = ["# VLESS test report", "",
-             "| Profile | Route | Status | Success | Median Mbps | TTFB ms |",
-             "| --- | --- | --- | --- | --- | --- |"]
+    lines = ["# Proxy profile test report", "",
+             "| Profile | Protocol | Route | Status | Success | Median Mbps | TTFB ms |",
+             "| --- | --- | --- | --- | --- | --- | --- |"]
     for row in ranked:
         route = row["route"].replace("|", "/")
-        lines.append(f"| {row['profile']} | {route} | {row['status']} | "
+        lines.append(f"| {row['profile']} | {row['protocol']} | {route} | {row['status']} | "
                      f"{row['successful_runs']}/{row['requested_runs']} | "
                      f"{row['median_download_Mbps']} | {row['median_ttfb_ms']} |")
     report = "\n".join(lines) + "\n"
@@ -236,15 +255,22 @@ def execute(args, profiles):
     print("REPORT_DIRECTORY", directory, flush=True)
     try:
         for number, profile in enumerate(profiles, 1):
-            print(f"[{number}/{len(profiles)}] profile-{profile['id']:03d}", flush=True)
+            print(f"[{number}/{len(profiles)}] profile-{profile['id']:03d} [{profile['link'].split(':', 1)[0].upper()}]", flush=True)
             summary, samples = measure_profile(profile, args, directory, routes)
             summaries.append(summary)
             details.extend(samples)
             write_reports(directory, summaries, details)
+            from thirtyna import test_history
+            test_history.record(args.history, directory.name, profile["link"], args.bytes, summary, samples)
     except KeyboardInterrupt:
         write_reports(directory, summaries, details)
         print("INTERRUPTED; completed profiles saved in", directory)
         return 130
+    from thirtyna import test_history
+    classification = test_history.catalog(args.history, args.bytes, args.window,
+                                         args.min_runs, args.classification_policy)
+    test_history.display(classification, args.history.parent / "catalog.json")
+    (directory / "catalog.json").write_text(json.dumps(classification, indent=2))
     print(write_reports(directory, summaries, details))
     print("REPORT_DIRECTORY", directory)
     return 0 if all(row["status"] == "OK" for row in summaries) else 1
