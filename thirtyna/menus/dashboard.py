@@ -73,7 +73,7 @@ CATALOG = (
                (Field("First number"), Field("Second number")),
                hint="Prints add, subtract, multiply, divide in that order."),)),
     ("System", (Action("All system fields", ("-sys", *("-" + f for f in SYSTEM))),)
-     + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM)),
+     + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM) + (Action("Local interface IPs", ("-sys", "-ip")),)),
     ("Host", (
         Action("List hosts", ("-host", "-list")),
         Action("Register IP or domain", ("-host", "-add", "-domain", 0),
@@ -151,6 +151,7 @@ class Snapshot:
         self.host_rows = []
         self.tunnel_rows = []
         self.system = []
+        self.local_ips = None
         self.services = None
         self.workers = None
         self.overview_time = None
@@ -197,6 +198,10 @@ class Snapshot:
                 rows = dict(line.split() for line in result.stdout.splitlines() if len(line.split()) == 2)
                 if set(rows) == {"host", "tunnel", "supervisor", "port"}:
                     self.workers = rows
+        elif args == ["-sys", "-ip"]:
+            self.local_ips = None
+            if result.code == 0 and not result.truncated:
+                self.local_ips = [] if result.stdout.strip() == "none" else result.stdout.split()
         elif args == ["-sys", *("-" + f for f in SYSTEM)]:
             self.system = list(zip(SYSTEM, result.stdout.splitlines())) if result.code == 0 and not result.truncated else []
 
@@ -289,7 +294,7 @@ class Dashboard:
             half = w//2
             self.draw(1, 1, "SYSTEM / " + sysinfo.get("hostname", "?"), self.accent, limit=half-2)
             self.draw(1, half+1, "CONTEXT HELP / " + focused, self.accent, limit=w-half-2)
-            info = ["OS " + sysinfo.get("os", "?"),
+            info = ["IP " + self.local_ip_text(), "OS " + sysinfo.get("os", "?"),
                     "Kernel " + sysinfo.get("kernel", "?") + " | Up " + sysinfo.get("uptime", "?"),
                     "CPU " + sysinfo.get("cpu", "?"),
                     "RAM " + sysinfo.get("ram", "?"),
@@ -316,7 +321,7 @@ class Dashboard:
                 self.draw(y, region.left-1, "|", self.accent, limit=1)
                 self.draw(y, region.right-1, "|", self.accent, limit=1)
         elif region.top >= 4:
-            self.draw(1, 1, sysinfo.get("hostname", "?") + " | " + sysinfo.get("os", "OS ?"), self.accent)
+            self.draw(1, 1, sysinfo.get("hostname", "?") + " | IP " + self.local_ip_text(), self.accent)
             self.draw(2, 1, "HELP: " + context, self.normal)
         title = {"home": "AGENTS" if not region.expanded else focused.upper() + " / OPTIONS",
                  "actions": category.upper(), "form": category + " / " + (self.action.title if self.action else ""),
@@ -437,14 +442,18 @@ class Dashboard:
         rows += snap.services if snap.services else (["None"] if snap.services == [] else [])
         return rows
 
+    def local_ip_text(self):
+        ips = self.snapshot.local_ips
+        return "?" if ips is None else " ".join(ips) if ips else "none"
+
     def overview_lines(self):
-        return ["SYSTEM", *[f"{k}: {v}" for k, v in self.snapshot.system],
+        return ["SYSTEM", "Local IPs: " + self.local_ip_text(), *[f"{k}: {v}" for k, v in self.snapshot.system],
                 "", *self.side_lines(), "", "Last overview: " + (self.snapshot.overview_time or "unknown"),
                 "Worker states are last observed; port reported is not a liveness probe.",
                 "Registered host does not mean connected. Use agent lists for full details."]
 
     def refresh_overview(self):
-        for args in (["-sys", *("-" + f for f in SYSTEM)], ["-service", "-active"], ["-service", "-workers"]):
+        for args in (["-sys", *("-" + f for f in SYSTEM)], ["-sys", "-ip"], ["-service", "-active"], ["-service", "-workers"]):
             self.snapshot.observe(args, self.runner(args))
         self.snapshot.overview_time = time.strftime("%H:%M:%S")
         self.side_scroll = 0
@@ -492,12 +501,12 @@ class Dashboard:
             elif not self.choices:
                 self.choices.append((None, "[Enter tunnel ID manually]"))
         else:
-            hosts = self.snapshot.host_rows
+            local_ips = []
             if kind == "target":
-                result = self.runner(["-host", "-list"])
-                self.snapshot.observe(["-host", "-list"], result)
-                hosts = self.snapshot.host_rows
-            self.choices = suggestions(kind, self.values[self.index], hosts)
+                result = self.runner(["-sys", "-ip"])
+                self.snapshot.observe(["-sys", "-ip"], result)
+                local_ips = self.snapshot.local_ips or []
+            self.choices = suggestions(kind, self.values[self.index], local_ips)
         self.choice_index = 0
         self.page = "picker"
         self.status, self.detail = "OK", "Select a value or enter custom"

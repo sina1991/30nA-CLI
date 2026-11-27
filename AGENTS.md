@@ -39,3 +39,5 @@ Report only mission, branch, baseline/head SHA, changed files, observed tests/CI
 For TUI control-center changes, read `docs/TUI_GUIDE.md`, `thirtyna/menus/dashboard.py`, `tests/test_dashboard.py`. Delegate to the same release CLI without a shell; keep observed counts separate from command exit status. Preserve direct file manager and legacy numbered/Tk modes.
 
 For systemd operations use `thirtyna/agents/systemctl.py`, `docs/SYSTEMD_SERVICE_GUIDE.md`, `tests/test_systemctl.py`. This public agent is distinct from the internal supervisor. Never escalate automatically or mutate real services in tests. Dashboard regions live in `thirtyna/menus/panels.py`.
+
+Local IP discovery: `thirtyna/agents/sysinfo.py` (`-sys -ip`) uses local interface information, not Host registration or external DNS. Target pickers must not require saved hosts to show local addresses.

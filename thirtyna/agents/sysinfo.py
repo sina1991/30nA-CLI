@@ -1,5 +1,7 @@
+import ipaddress
 import platform
 import shutil
+import subprocess
 from pathlib import Path
 
 from thirtyna.core import UsageError, parser
@@ -8,7 +10,27 @@ SWITCH = "-sys"
 NAME = "System Agent"
 
 
+def local_addresses():
+    """Read assigned non-loopback interface addresses, not DNS or saved hosts."""
+    try:
+        result = subprocess.run(["hostname", "-I"], capture_output=True, text=True,
+                                check=True, timeout=3)
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RuntimeError("Local interface addresses unavailable") from exc
+    addresses = []
+    for value in result.stdout.split():
+        try:
+            address = ipaddress.ip_address(value)
+        except ValueError:
+            continue
+        if not address.is_loopback and not address.is_unspecified and str(address) not in addresses:
+            addresses.append(str(address))
+    return addresses
+
+
 def report(field):
+    if field == "ip":
+        return " ".join(local_addresses()) or "none"
     if field == "hostname":
         return platform.node()
     if field == "os":
@@ -31,7 +53,7 @@ def report(field):
 def run(argv):
     cli = parser(SWITCH, NAME + " reads Linux system information.",
                  "Example: 30na -sys -hostname -kernel. Flags only, no input required.")
-    for field in ("hostname", "os", "kernel", "uptime", "cpu", "ram", "disk"):
+    for field in ("hostname", "os", "kernel", "uptime", "cpu", "ram", "disk", "ip"):
         cli.add_argument("-" + field, action="store_true")
     args = vars(cli.parse_args(argv))
     if not any(args.values()):

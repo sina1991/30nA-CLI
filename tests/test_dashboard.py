@@ -62,6 +62,8 @@ class DashboardTests(unittest.TestCase):
             return Result(0, "host ready\nsupervisor running\nport reported\ntunnel ready\n")
         if args in (["-service", "-installed"], ["-service", "-list"]):
             return Result(0, "ssh.service enabled\n")
+        if args == ["-sys", "-ip"]:
+            return Result(0, "192.0.2.55 2001:db8::55\n")
         if args[0] == "-sys":
             return Result(0, "testhost\nUbuntu\n6.8\n100 seconds\nCPU\nRAM\nDisk\n")
         if args[:2] == ["-calc", "-div"]:
@@ -110,7 +112,7 @@ class DashboardTests(unittest.TestCase):
                          ["Calculator", "System", "Host", "Tunnel", "Files", "Help", "Services"])
         actions = dict(CATALOG)
         self.assertEqual(len(actions["Calculator"]), 5)
-        self.assertEqual(len(actions["System"]), 8)
+        self.assertEqual(len(actions["System"]), 9)
         self.assertEqual(len(actions["Host"]), 5)
         self.assertEqual(len(actions["Tunnel"]), 4)
         self.assertEqual(len(actions["Help"]), 7)
@@ -197,6 +199,7 @@ class DashboardTests(unittest.TestCase):
         self.keys("r")
         self.ui.render()
         self.assertIn("SYSTEM / testhost", self.screen.lines[1])
+        self.assertIn("IP 192.0.2.55", self.screen.lines[2])
         self.assertIn("CONTEXT HELP / Calculator", self.screen.lines[1])
         self.keys("j", "j", "j")
         self.ui.render()
@@ -222,6 +225,14 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(self.ui.editing)
         self.keys("\x15", *"10.0.0.7", "\n")
         self.assertEqual(self.ui.values[2], "10.0.0.7")
+
+    def test_target_picker_reads_local_interfaces_without_host_registration(self):
+        self.hosts = []
+        self.keys("4", "j", "\n", "j", "j", "f")
+        self.assertEqual(self.calls, [(["-sys", "-ip"], False)])
+        self.assertIn(("192.0.2.55", "192.0.2.55 (local interface)"), self.ui.choices)
+        self.keys("j", "j", "\n")
+        self.assertEqual(self.ui.values[2], "192.0.2.55")
 
     def test_service_picker_and_confirmation(self):
         self.keys("7", "j", "j", "j", "j", "j", "\n", "f", "\n", "j", "\n")
