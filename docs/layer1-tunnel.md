@@ -54,3 +54,5 @@ python3 -m unittest discover -s tests -v
 ```
 
 Mock tests cover state transitions, delayed failures, timeout, lifecycle, isolation and port collision. CI also enables an isolated loopback sshd fixture with generated keys, strict host key verification, forward/reverse bidirectional data and authentication/collision checks. No production SSH endpoints are contacted. Local real SSH tests require the documented CI prerequisites, a non-root test user with passwordless sudo and /run/sshd; set THIRTYNA_REAL_SSH=1 explicitly. Consult actual CI logs for pass/fail; the existence of a test is not evidence that it passed.
+
+Numbered Forward automatically uses the locally imported management key if present, with the same strict host-key and identity configuration checks as onboarding. Legacy commands and installations without a management key retain the original SSH configuration behavior. An old supervisor must be restarted before new managed Forward starts; existing tunnels are not stopped automatically.

@@ -136,6 +136,10 @@ def run(argv):
         raise RuntimeError("Restart Service Agent before using this Tunnel release")
     if modern and operation == "start" and agent.get("endpoint_protocol") != 1:
         raise RuntimeError("Restart Service Agent before using local/remote endpoints")
+    if modern and operation == "start" and direction == "forward" and not agent.get("management_forward_identity"):
+        from thirtyna.ssh_identity import existing_identity
+        if existing_identity() is not None:
+            raise RuntimeError("Old Tunnel Worker: restart local Service Agent only after stopping or scheduling interruption of its active tunnels")
     if operation == "start" and is_domain(parameters["host"]) and not agent.get("domain_support"):
         raise RuntimeError("Restart Service Agent before using domain names")
     if agent.get("recovery_warning"):

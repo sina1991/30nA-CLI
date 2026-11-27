@@ -128,17 +128,34 @@ def initialize(recovery_fd, directory, host_info):
                                retry_after=time.monotonic() + 0.5)
 
 
+def _management_options(parameters):
+    # Only the modern Forward contract uses the enrolled identity. Legacy
+    # scripts and hosts without an imported pair retain SSH config behavior.
+    if parameters["mode"] != "forward" or "remote_id" not in parameters:
+        return []
+    from thirtyna.ssh_identity import existing_identity, identity_options
+    from thirtyna.onboarding import verify_identity_config
+    key = existing_identity()
+    if key is None:
+        return []
+    verify_identity_config(parameters["host"], key)
+    return [*identity_options(key), "-o", "IdentityAgent=none",
+            "-o", "CertificateFile=none", "-o", "PreferredAuthentications=publickey",
+            "-o", "StrictHostKeyChecking=yes"]
+
+
 def _launch(token, parameters, restore):
     if "remote_id" in parameters:
         from thirtyna.endpoints import local_ip
         local_ip(parameters["local"])
+    management = _management_options(parameters)
     directory = tempfile.mkdtemp(prefix="s-", dir=_SOCKET_ROOT)
     item = dict(directory=directory, socket=os.path.join(directory, "s"),
                 master=None, forward=None, master_log=None, forward_log=None,
                 deadline=time.monotonic() + STARTUP_TIMEOUT)
     try:
         item["master_log"] = tempfile.TemporaryFile(mode="w+b")
-        argv = ["ssh", "-M", "-S", item["socket"], "-N", "-T",
+        argv = ["ssh", *management, "-M", "-S", item["socket"], "-N", "-T",
                 "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
                 "-o", "ConnectTimeout=5", "-o", "ControlPersist=no",
                 "-o", "ForkAfterAuthentication=no", "-o", "ClearAllForwardings=yes",

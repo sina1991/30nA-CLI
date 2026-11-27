@@ -354,6 +354,7 @@ class Supervisor:
         result["endpoint_protocol"] = 1
         if name == "tunnel":
             result["tunnel_protocol"] = 2
+            result["management_forward_identity"] = True
             if self.recovery_warning:
                 result["recovery_warning"] = self.recovery_warning
         return result
