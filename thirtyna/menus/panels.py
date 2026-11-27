@@ -5,7 +5,7 @@ from dataclasses import dataclass
 HELP = {
     "Calculator": "Decimal arithmetic. Choose an operation and enter two numbers.",
     "System": "Read Linux hostname, OS, kernel, uptime, CPU, RAM, disk and assigned interface IPs.",
-    "Host": "Register IP/DNS, list, remove or open interactive SSH. f selects a saved host.",
+    "Host": "Enroll with SSH key or interactive password, list, remove or connect. f selects a saved host.",
     "Tunnel": "Local ID 1 / numbered remote. Forward listens locally; reverse listens remotely. f selects endpoints and ports.",
     "Files": "Browse, copy, move and edit files in the two-pane manager.",
     "Help": "Open exact CLI help for any public agent.",

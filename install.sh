@@ -44,7 +44,7 @@ cp -R -- "$src/thirtyna" "$src/30na" "$release/"
 # Record the exact Git revision when available (no dependency for archive installs).
 if [[ -e "$src/.git" ]] && command -v git >/dev/null; then
     revision=$(git -C "$src" rev-parse HEAD)
-    if [[ "$revision" =~ ^[0-9a-f]{40}$ ]] && [[ -z $(git -C "$src" status --porcelain --untracked-files=no) ]]; then
+    if [[ "$revision" =~ ^[0-9a-f]{40}$ ]] && [[ -z $(git -C "$src" status --porcelain) ]]; then
         printf "%s\n" "$revision" > "$release/.revision"
     fi
 fi

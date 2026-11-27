@@ -7,7 +7,6 @@ import subprocess
 import sys
 
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
-REPOSITORY = "https://github.com/sina1991/30nA-CLI.git"
 
 # Fixed remote program. Values substituted below are validated hex strings.
 REMOTE = r"""
@@ -77,8 +76,7 @@ def main():
                 raise RuntimeError('Fetched revision mismatch')
             require(['bash', str(Path(tmp) / 'install.sh')], 'Install (dependencies must already exist)',
                     30, dict(env, PREFIX=str(prefix), INSTALL_DEPS='0'))
-    if not marker.is_file():
-        marker = launcher.resolve().parent / '.revision'
+    marker = launcher.resolve().parent / '.revision'
     if not marker.is_file() or marker.read_text().strip() != revision:
         raise RuntimeError('Installed revision not verified')
     require([str(launcher), '-help'], 'CLI verification')
@@ -89,6 +87,7 @@ def main():
     show('TCP/UDP PORTS AND OWNERS', ['ss', '-H', '-lntup'])
     show('ACTIVE SYSTEMD SERVICES', ['systemctl', '--no-pager', '--no-legend', '--plain', 'list-units', '--type=service', '--state=active'])
     show('30nA WORKERS', [str(launcher), '-service', '-workers'])
+    show('SYSTEM DETAILS', [str(launcher), '-sys', '-hostname', '-os', '-kernel', '-uptime', '-cpu', '-ram', '-disk'])
     # Never print complete command lines, key paths or arbitrary SSH options.
     print('=== OBSERVED SSH FORWARDS ===', flush=True)
     import re
@@ -138,25 +137,35 @@ def controller_revision():
     return value
 
 
-def enroll(address):
+def enroll(address, interactive=False):
     """SSH config provides credentials; never install using an unverified host key."""
+    if interactive and not sys.stdin.isatty():
+        raise RuntimeError("Password authentication requires an interactive terminal")
     revision = controller_revision()
     machine = Path("/etc/machine-id").read_bytes().strip()
     if not machine:
         raise RuntimeError("Local machine identity unavailable")
     script = REMOTE.replace("__REVISION__", revision).replace(
         "__CONTROLLER__", hashlib.sha256(machine).hexdigest())
-    argv = ["ssh", "-T", "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=yes",
+    authentication = "publickey,password,keyboard-interactive" if interactive else "publickey"
+    argv = ["ssh", "-T", "-o", "BatchMode=" + ("no" if interactive else "yes"),
+            "-o", "PreferredAuthentications=" + authentication,
+            "-o", "StrictHostKeyChecking=" + ("ask" if interactive else "yes"),
+            "-o", "ForwardAgent=no", "-o", "NumberOfPasswordPrompts=3",
             "-o", "ConnectTimeout=8", "-o", "ClearAllForwardings=yes",
             "-o", "ControlMaster=no", "-o", "ControlPath=none",
             "-o", "PermitLocalCommand=no", "--", address, "python3", "-"]
     try:
-        result = subprocess.run(argv, input=script, text=True, capture_output=True, timeout=130)
+        if interactive:
+            print("Verify any new host fingerprint against a trusted source before accepting.", file=sys.stderr, flush=True)
+        result = subprocess.run(argv, input=script, text=True, stdout=subprocess.PIPE,
+                                stderr=None if interactive else subprocess.PIPE,
+                                timeout=240 if interactive else 150)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("Enrollment timed out; inspect remote installation before retrying") from exc
     # A failed SSH command can return arbitrary remote text. Do not relay stderr.
     output = result.stdout
     if output:
         print(output[:60000], end="" if output.endswith("\n") else "\n", flush=True)
-    if result.returncode or not output.rstrip().endswith("ENROLLMENT_OK"):
+    if result.returncode or not output.splitlines() or output.splitlines()[-1] != "ENROLLMENT_OK":
         raise RuntimeError("Enrollment not confirmed; check SSH access, trusted host key and dependencies")
