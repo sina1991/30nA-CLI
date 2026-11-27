@@ -31,3 +31,7 @@ CI و Readiness ادغام شده‌اند. بازیابی محدود بعد ا�
 Local ID 1, stable remote IDs, fixed local/remote ports. Validate current PR CI.
 
 نسخه قبلی PR #10 با 85/85 CI تأیید شده است. تغییر قرارداد Tunnel در PR جدید با تست جداگانه بررسی می‌شود.
+
+## Host onboarding
+
+Authenticated pinned deployment and observed remote inventory with key or native interactive authentication. Exact-head CI required; centralized remote tunnel execution remains separate.

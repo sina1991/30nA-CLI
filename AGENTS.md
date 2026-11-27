@@ -43,3 +43,5 @@ For systemd operations use `thirtyna/agents/systemctl.py`, `docs/SYSTEMD_SERVICE
 Local IP discovery: `thirtyna/agents/sysinfo.py` (`-sys -ip`) uses local interface information, not Host registration or external DNS. Target pickers must not require saved hosts to show local addresses.
 
 Public Port Inspection Agent: `thirtyna/agents/port.py`, `tests/test_port.py`, `docs/PORT_AGENT_GUIDE.md`. Distinct from runtime allocator; read-only by default. Explicit -force is the only public emergency release exception; verify exact owner, protect SSH/runtime/ancestors, never indiscriminately kill listeners. Owner/unit unknown when unavailable.
+
+Host onboarding: `thirtyna/onboarding.py`, `docs/HOST_ONBOARDING.md`, `tests/test_onboarding.py`. Deploy only pinned controller revision after SSH host verification. Native interactive SSH prompts only; never store passwords. No automatic privilege escalation, dependency installation, worker restart or service mutation. Preserve offline registration.

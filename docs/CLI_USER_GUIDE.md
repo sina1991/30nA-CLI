@@ -107,3 +107,13 @@ clear
 [راهنمای Port Agent](PORT_AGENT_GUIDE.md).
 
 آزادسازی اضطراری Port فقط با پروتکل و مالک صریح انجام می‌شود؛ ابتدا -check را اجرا کنید. [راهنمای -force](PORT_AGENT_GUIDE.md).
+
+## افزودن و آماده‌سازی Remote
+
+```bash
+clear
+30na -host -add -domain ssh.example.test -onboard
+30na -host -add -domain ssh.example.test -onboard -password
+```
+
+[راهنمای Host Onboarding](HOST_ONBOARDING.md).
