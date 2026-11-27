@@ -34,7 +34,7 @@ Local ID 1, stable remote IDs, fixed local/remote ports. Validate current PR CI.
 
 ## Host onboarding
 
-Authenticated pinned deployment and observed remote inventory with key or native interactive authentication. Exact-head CI required; centralized remote tunnel execution remains separate.
+Host onboarding verifies the management key over SSH before saving the host. It requires no 30nA installation on the peer.
 
 ## Remote topology
 

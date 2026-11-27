@@ -30,6 +30,16 @@ clear
 
 [نصب](docs/INSTALLATION_GUIDE.md) · [دستورات](docs/CLI_USER_GUIDE.md) · [معماری](docs/ARCHITECTURE_GUIDE.md) · [توسعه Agent](docs/AGENT_DEVELOPMENT_GUIDE.md) · [تست](docs/TESTING_GUIDE.md) · [وضعیت](docs/DEVELOPMENT_STATUS.md)
 
+## فهرست راهنماها
+
+| کار | راهنما |
+| --- | --- |
+| نصب روی Ubuntu تازه و به‌روزرسانی | [نصب](docs/INSTALLATION_GUIDE.md) |
+| ثبت Host، کلید عمومی و ورود مجدد | [Host و SSH](docs/HOST_ONBOARDING.md) |
+| ساخت، فهرست و توقف Forward و Reverse | [Tunnel](docs/layer1-tunnel.md) |
+| توپولوژی، پورت‌ها و کشف Tunnel موجود | [معماری Tunnel](docs/REMOTE_TUNNEL_ARCHITECTURE.md) |
+| عیب‌یابی و پذیرش | [عیب‌یابی](docs/TROUBLESHOOTING_GUIDE.md) · [تست](docs/TESTING_GUIDE.md) |
+
 ## Menu Agent
 
 منوی مرکزی تمام ایجنت‌ها با TUI و Status Bar:

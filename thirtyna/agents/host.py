@@ -20,7 +20,7 @@ def run(argv):
     endpoint.add_argument("-ip", nargs="?", const="", metavar="ADDRESS", help="IPv4, IPv6 or DNS name")
     endpoint.add_argument("-domain", dest="ip", nargs="?", const="", metavar="NAME", help="Alias for -ip")
     cli.add_argument("-ssh", action="store_true")
-    cli.add_argument("-onboard", action="store_true", help="With -add: authenticate, deploy controller revision and inspect remote")
+    cli.add_argument("-onboard", action="store_true", help="With -add: verify SSH access and register the management public key if needed")
     cli.add_argument("-password", action="store_true", help="Interactive SSH authentication (key/passphrase/password); never a password value")
     cli.add_argument("-ids", action="store_true", help="Numbered local/remote inventory (with -list)")
     args = cli.parse_args(argv)
@@ -59,10 +59,12 @@ def run(argv):
             print(ip)
     if args.ssh:
         options = [] if sys.stdin.isatty() else ["-o", "BatchMode=yes"]
-        from thirtyna.ssh_identity import existing_identity, identity_options
+        from thirtyna.ssh_identity import existing_identity
         key = existing_identity()
         if key is not None:
-            options += identity_options(key)
+            from thirtyna.onboarding import ssh_options, verify_identity_config
+            verify_identity_config(address, key)
+            options = ssh_options(key)
         status = subprocess.run(["ssh", *options, "--", address]).returncode
         if status:
             raise RuntimeError(f"SSH exited with status {status}")
