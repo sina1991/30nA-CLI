@@ -51,4 +51,4 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-آدرس `-ip` باید پیش‌تر در Host Agent ثبت شده باشد. در Forward پورت روی Loopback محلی و در Reverse روی Loopback میزبان SSH باز می‌شود. احراز هویت SSH باید غیرتعاملی باشد. خروجی `state=starting` به‌معنی برقراری قطعی Tunnel نیست. جزئیات در [مستند معماری Tunnel](layer1-tunnel.md) آمده است.
+آدرس `-ip` باید پیش‌تر در Host Agent ثبت شده باشد. در Forward پورت روی Loopback محلی و در Reverse روی Loopback میزبان SSH باز می‌شود. احراز هویت SSH باید غیرتعاملی باشد. خروجی `state=starting` به‌معنی انتظار برای تأیید OpenSSH است. با `-list` وضعیت `ready` (تأیید Forwarding، نه دسترسی قطعی به Target) یا `failed` و `reason` را بررسی کنید. با `-stop` اتصال یا رکورد خطا را حذف کنید. جزئیات در [مستند معماری Tunnel](layer1-tunnel.md) آمده است.

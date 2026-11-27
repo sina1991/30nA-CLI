@@ -1,6 +1,6 @@
 # Layer 1 Tunnel Agent
 
-The public agent `-tunnel` follows the discovered `SWITCH`, `NAME`, `run(argv)` contract. The Tunnel Worker is a separate Service Agent child and starts OpenSSH as its own supervised subprocess. It never imports SQLite or opens `hosts.db`: on each start it calls the authenticated Host Agent worker's `exists` operation using the same Service Agent IPC. It shares the Service Agent and Port Agent with the Host Agent.
+The public agent exposes SWITCH, NAME, run(argv). A separate Service Agent worker owns tunnel processes and authorizes every new start through Host Agent authenticated IPC; it never opens hosts.db. The shared Port Agent allocates worker control sockets only. OpenSSH owns forwarding listeners.
 
 ## CLI contract
 
@@ -14,29 +14,21 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-The `-ip` value must already be registered with the Host Agent; only numeric IPv4/IPv6 addresses are permitted. `-listen` and `-target-port` are integer ports between 1 and 65535. `-target` is a numeric IPv4 or IPv6 address. One of `-forward`, `-reverse`, `-list`, `-stop` is required. `-stop` requires the ID returned by `-forward` or `-reverse`.
+Numeric IPv4/IPv6 addresses and ports 1–65535 are required. The SSH host must be registered. Forward requests local loopback and Reverse requests remote loopback. A remote sshd must enforce GatewayPorts=no; its policy can override requested binding. No dynamic forwarding.
 
-Forward uses `ssh -L 127.0.0.1:LISTEN:TARGET:TARGET_PORT`; the listening socket is on the CLI host. Reverse uses `ssh -R 127.0.0.1:LISTEN:TARGET:TARGET_PORT`; the listening socket is on the remote SSH server. Both deliberately bind loopback, not public network interfaces. Dynamic forwarding (`-D`) is unsupported.
+## Readiness and failures
 
-OpenSSH is invoked as an argument vector (never via a shell), with `-N -T`, `BatchMode=yes`, `ExitOnForwardFailure=yes`, and `ConnectTimeout=5`. Configure non-interactive SSH credentials (typically keys) before starting a tunnel. The CLI returns a random tunnel ID and an SSH PID. `state=starting` confirms only that the process remained alive during its initial one-second check. It does **not** prove completed authentication, remote routing, or established forwarding; an SSH process that exits later disappears from `-list` upon the next request.
+Each tunnel starts its own foreground OpenSSH ControlMaster with a short private Unix control socket, no implicit configured forwards, and noninteractive authentication. A separate control client requests exactly one forward with -O forward. The worker marks ready only when this request exits successfully and the master is alive; reverse confirmation comes from the SSH server. This proves forwarding setup, not connectivity to the ultimate target. SSH configuration still supplies credentials, host keys, user and port. Host-key verification remains subject to that configuration.
 
-## Lifecycle and safety
+The CLI returns id, pid and state=starting or state=ready; initial errors may return nonzero. Later errors appear in -list as state=failed reason=authentication_failed, host_key_failed, connection_failed, port_collision, forwarding_rejected, forwarding_command_failed, startup_timeout or ssh_exited. Diagnostics use fixed labels rather than printing raw SSH logs. Port collisions and server policy rejection can be indistinguishable for remote forwarding. Startup has a 12-second deadline and is monitored even without CLI polling. Up to 32 active sessions and 64 failed entries are retained in memory; stop removes either type.
 
-Each XDG data directory owns one Service Agent, one Port Agent, and separately keyed Host and Tunnel Workers. All frontend/worker requests are authenticated via the existing challenge/HMAC mechanism. Worker control sockets are allocated by the shared Port Agent. **OpenSSH itself** owns the actual forwarding listener; the Port Agent cannot pass its allocated listener FD to OpenSSH. Therefore tunnel port conflicts are detected from OpenSSH's startup diagnostics, not reassigned by the Port Agent. Port collision and SSH authentication errors after the initial check may surface asynchronously as process exit; no port fallback is attempted.
+## Lifecycle and recovery policy
 
-`-stop -id` stops only the tracked SSH child. When the Tunnel Worker exits normally, its `finally` block terminates and reaps all SSH children, including killing a nonresponsive child. Linux `PR_SET_PDEATHSIG` causes SSH to receive SIGTERM when its parent worker is killed. A crashed Worker is recreated on the next CLI command and has an empty tunnel registry. An unexpected SSH child exit is pruned upon the next Tunnel request. Tunnel IDs are in-memory and cease to exist when the worker stops. Host changes do not automatically terminate already established tunnels. Do not rely on this agent as a high-availability SSH connection manager.
-
-To stop the Tunnel Worker itself without stopping Host Agent:
+The worker terminates only its own SSH children, not foreign listeners. Parent-death signalling handles worker crashes; normal shutdown removes control directories and closes logs. SIGKILL may leave a private temporary control directory (the SSH process is terminated; do not reuse stale sockets). Failed entries and tunnel IDs are in memory and disappear after worker restart. Host removal does not automatically terminate an established tunnel. Automatic restoration is not implemented in this change and is not claimed. A fresh CLI start reauthorizes the host. Do not rely on this for high availability.
 
 ```bash
 clear
 python3 -c 'from thirtyna.runtime.service import control; print(control("stop", "tunnel"))'
-```
-
-To shut down the entire per-user Service Agent (also stops Host Agent):
-
-```bash
-clear
 python3 -m thirtyna.runtime.service shutdown
 ```
 
@@ -44,8 +36,7 @@ python3 -m thirtyna.runtime.service shutdown
 
 ```bash
 clear
-python3 -m unittest -v tests.test_tunnel
 python3 -m unittest discover -s tests -v
 ```
 
-The Tunnel integration suite uses a mock SSH command that binds local loopback sockets to simulate `-L` and `-R`, exercises collision, authorization, lifecycle, cleanup, recovery, and agent process relationships. These tests **do not** validate a real SSH server or reverse forwarding over the network. Live remote SSH/port-forwarding acceptance requires a configured test server. Run the full suite against the final commit SHA on a clean Linux checkout.
+Mock tests cover state transitions, delayed failures, timeout, lifecycle, isolation and port collision. CI also enables an isolated loopback sshd fixture with generated keys, strict host key verification, forward/reverse bidirectional data and authentication/collision checks. No production SSH endpoints are contacted. Local real SSH tests require the documented CI prerequisites, a non-root test user with passwordless sudo and /run/sshd; set THIRTYNA_REAL_SSH=1 explicitly. Consult actual CI logs for pass/fail; the existence of a test is not evidence that it passed.

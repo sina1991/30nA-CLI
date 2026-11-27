@@ -11,4 +11,4 @@ python3 -m unittest discover -s tests -v
 
 ## CI و Tunnel
 
-Workflow در `.github/workflows/ci.yml` روی PR به main و Push به main، مجموعه کامل unittest را در Ubuntu اجرا می‌کند. نتیجه را برای SHA دقیق بررسی کنید. وجود Workflow به‌تنهایی به معنی اجرای موفق نیست. در حال حاضر تست‌های Tunnel با Mock اجرا می‌شوند؛ اجرای OpenSSH واقعی باید جداگانه با محیط ایزوله و شواهد ثبت‌شده بررسی شود. برای تست محلی از همان دستور بالا استفاده کنید.
+Workflow در `.github/workflows/ci.yml` روی PR به main و Push به main، مجموعه کامل unittest را در Ubuntu اجرا می‌کند. نتیجه را برای SHA دقیق بررسی کنید. وجود Workflow به‌تنهایی به معنی اجرای موفق نیست. تست‌های Mock و Real SSH جدا هستند. CI با THIRTYNA_REAL_SSH=1 و نصب openssh-server یک sshd ایزوله روی Loopback با کلید موقت اجرا می‌کند. برای اجرای محلی Real SSH به کاربر غیر root، sudo بدون رمز برای sshd آزمایشی و مسیر /run/sshd نیاز است. بدون opt-in، تست‌های Real SSH با Skip مشخص می‌شوند. برای تست محلی از همان دستور بالا استفاده کنید.

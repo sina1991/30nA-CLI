@@ -11,4 +11,4 @@ clear
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-Requires a registered Host and non-interactive OpenSSH authentication. `state=starting` does not certify remote readiness. No dynamic forwarding.
+Requires a registered Host and non-interactive OpenSSH authentication. `-list` reports `state=starting`, `state=ready` (OpenSSH forwarding confirmation, not target reachability), or `state=failed` with a reason. `-stop` removes active and failed entries. No dynamic forwarding.
