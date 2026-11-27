@@ -16,7 +16,9 @@ import re
 import secrets
 import shlex
 import socket
+import stat
 import subprocess
+import tempfile
 import time
 
 from thirtyna.core import UsageError
@@ -30,6 +32,7 @@ TOKEN = re.compile(r"[0-9a-f]{24}\Z")
 PUBLIC = re.compile(r"ssh-ed25519 [A-Za-z0-9+/=]+(?: .*)?\Z")
 SSHD = "/usr/sbin/sshd"
 CONFIG = Path("/etc/ssh/sshd_config.d")
+SSHD_CONFIG = Path("/etc/ssh/sshd_config")
 MAX_TUNNELS = 32
 
 
@@ -160,9 +163,84 @@ def write_new(path, value):
     path.chmod(0o644)
 
 
+def effective_policy(row, peer_ip):
+    return command([SSHD, "-T", "-C",
+                    f"user={account(row)},host={peer_ip},addr={peer_ip},"
+                    f"laddr={row['gateway']},lport=22"]).splitlines()
+
+
+def main_policy_block(row):
+    # A new Match User starts its own context even if the original file ends
+    # in a Match block. Do not enable unrelated, previously dormant drop-ins.
+    return (f"\n# BEGIN 30nA reverse {row['id']}\n" + policy(row)
+            + f"# END 30nA reverse {row['id']}\n").encode()
+
+
+def read_main_config():
+    info = SSHD_CONFIG.lstat()
+    if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+            or info.st_mode & 0o022 or info.st_nlink != 1):
+        raise RuntimeError("Unsafe sshd_config; refusing automatic edit")
+    return SSHD_CONFIG.read_bytes(), info
+
+
+def replace_main_config(original, updated, info):
+    fd, name = tempfile.mkstemp(prefix=".30na-sshd-", dir=SSHD_CONFIG.parent)
+    temp = Path(name)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            os.fchown(stream.fileno(), info.st_uid, info.st_gid)
+            os.fchmod(stream.fileno(), stat.S_IMODE(info.st_mode))
+            stream.write(updated)
+            stream.flush()
+            os.fsync(stream.fileno())
+        current, current_info = read_main_config()
+        if (current != original or current_info.st_ino != info.st_ino
+                or current_info.st_dev != info.st_dev
+                or current_info.st_mode != info.st_mode
+                or current_info.st_uid != info.st_uid or current_info.st_gid != info.st_gid):
+            raise RuntimeError("sshd_config changed concurrently; refusing overwrite")
+        os.replace(temp, SSHD_CONFIG)
+        fd = os.open(SSHD_CONFIG.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    finally:
+        temp.unlink(missing_ok=True)
+
+
+def ensure_policy_loaded(row, peer_ip, persist):
+    command([SSHD, "-t"])
+    if f"authorizedkeysfile {keys_path(row)}" in effective_policy(row, peer_ip):
+        return
+    # On images with no effective Include, append exactly the same scoped
+    # policy directly. Preserve every pre-existing byte and all other users.
+    original, info = read_main_config()
+    block = main_policy_block(row)
+    if f"# BEGIN 30nA reverse {row['id']}".encode() in original:
+        raise RuntimeError("Unexpected existing managed sshd policy")
+    row["main_policy_attempt"] = True
+    persist()
+    replace_main_config(original, original + block, info)
+
+
+def remove_main_policy(row):
+    if not row.get("main_policy_attempt"):
+        return
+    original, info = read_main_config()
+    block = main_policy_block(row)
+    if original.count(block) == 1:
+        replace_main_config(original, original.replace(block, b"", 1), info)
+    elif (f"# BEGIN 30nA reverse {row['id']}".encode() in original
+          or f"# END 30nA reverse {row['id']}".encode() in original
+          or ("Match User " + account(row)).encode() in original):
+        raise RuntimeError("Managed sshd policy changed; refusing automatic removal")
+
+
 def validate_policy(row, peer_ip):
     command([SSHD, "-t"])
-    effective = command([SSHD, "-T", "-C", f"user={account(row)},host={peer_ip},addr={peer_ip}"]).splitlines()
+    effective = effective_policy(row, peer_ip)
     for setting in ("port 22", "pubkeyauthentication yes", "authenticationmethods publickey",
                     "maxsessions 0", "allowtcpforwarding remote", "gatewayports clientspecified",
                     "disableforwarding no", "passwordauthentication no",
@@ -244,6 +322,7 @@ def listener(row):
 
 
 def clean_local(row):
+    remove_main_policy(row)
     # Only exact generated configuration and keys belonging to this record.
     for path, expected in ((config_path(row), policy(row)),
                            (keys_path(row), row.get("authorized", ""))):
@@ -325,6 +404,7 @@ def start(parameters):
                      "--comment", "30na-reverse-" + row["id"], account(row)])
             write_new(keys_path(row), row["authorized"])
             write_new(config_path(row), policy(row))
+            ensure_policy_loaded(row, ips[0], lambda: save(path, rows))
             validate_policy(row, ips[0])
             remote(row, "start", definition=service_definition(row),
                    known_hosts=row["gateway"] + " " + host_key + "\n")

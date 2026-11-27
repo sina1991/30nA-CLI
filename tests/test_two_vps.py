@@ -85,6 +85,7 @@ class ReverseTests(unittest.TestCase):
                 return read(path, *a, **kw)
             stack.enter_context(patch.object(Path, "read_text", fake_read))
             command = stack.enter_context(patch("thirtyna.two_vps.command", return_value=""))
+            stack.enter_context(patch("thirtyna.two_vps.ensure_policy_loaded"))
             stack.enter_context(patch("thirtyna.two_vps.validate_policy"))
             stack.enter_context(patch("thirtyna.two_vps.listener", return_value=0 if failure else 321))
             remote = stack.enter_context(patch("thirtyna.two_vps.remote"))
@@ -201,3 +202,45 @@ class ReverseTests(unittest.TestCase):
             self.assertFalse(unit.exists())
             self.assertFalse((base/TOKEN).exists())
             self.assertEqual(foreign.read_text(), "preserve")
+
+
+    def test_missing_include_preserves_config_and_independent_tunnels(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            main = Path(tmp) / "sshd_config"
+            original = b"# Include /etc/ssh/sshd_config.d/*.conf\nPasswordAuthentication no\nMatch User legacy\n    PermitTTY no"
+            main.write_bytes(original)
+            main.chmod(0o640)
+            row = self.row()
+            second = dict(row, id="b"*24, local_port=1221)
+            with patch.object(engine, "SSHD_CONFIG", main), \
+                 patch.object(engine, "command"), patch.object(engine, "effective_policy", return_value=["authenticationmethods any"]):
+                calls = []
+                engine.ensure_policy_loaded(row, "192.0.2.2", lambda: calls.append(row["main_policy_attempt"]))
+                engine.ensure_policy_loaded(second, "192.0.2.2", lambda: calls.append(second["main_policy_attempt"]))
+                self.assertEqual(calls, [True, True])
+                self.assertEqual(main.read_bytes(), original + engine.main_policy_block(row) + engine.main_policy_block(second))
+                self.assertEqual(main.stat().st_mode & 0o777, 0o640)
+                self.assertNotIn(b"\nInclude /etc/ssh/sshd_config.d/*.conf", main.read_bytes())
+                engine.remove_main_policy(row)
+                self.assertEqual(main.read_bytes(), original + engine.main_policy_block(second))
+                engine.remove_main_policy(second)
+                self.assertEqual(main.read_bytes(), original)
+
+    def test_effective_dropin_never_edits_main(self):
+        row = self.row()
+        with patch.object(engine, "command"), \
+             patch.object(engine, "effective_policy", return_value=[f"authorizedkeysfile {engine.keys_path(row)}"]), \
+             patch.object(engine, "read_main_config", side_effect=AssertionError("unexpected edit")):
+            engine.ensure_policy_loaded(row, "192.0.2.2", lambda: self.fail("unexpected persistence"))
+        self.assertNotIn("main_policy_attempt", row)
+
+    def test_changed_managed_block_is_not_removed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            main = Path(tmp) / "sshd_config"
+            row = dict(self.row(), main_policy_attempt=True)
+            changed = engine.main_policy_block(row).replace(b"Match all", b"Match User legacy")
+            main.write_bytes(changed)
+            with patch.object(engine, "SSHD_CONFIG", main):
+                with self.assertRaisesRegex(RuntimeError, "changed"):
+                    engine.remove_main_policy(row)
+            self.assertEqual(main.read_bytes(), changed)
