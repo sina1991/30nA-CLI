@@ -257,28 +257,62 @@ Host 127.0.0.1 ssh.example.test
                     self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
             self.cli("-tunnel", "-stop", "-id", token)
 
-    def test_numbered_endpoints_real_forward_reverse_transfer(self):
-        for mode in ("forward", "reverse"):
-            with self.subTest(mode=mode), socket.socket() as target:
-                local = "127.0.0.2"
-                target.bind(("127.0.0.1" if mode == "forward" else local, 0))
-                target.listen()
-                target.settimeout(4)
-                listen = unused_port()
-                lp, rp = (listen, target.getsockname()[1]) if mode == "forward" else (target.getsockname()[1], listen)
-                endpoint = ("-remote-domain", "ssh.example.test") if mode == "forward" else ("-remote-id", str(remote_id))
-                result = self.cli("-tunnel", "-" + mode, "-ip", local, "-local-port", str(lp),
-                                  *endpoint, "-remote-port", str(rp))
-                token = result.stdout.split()[0].split("=")[1]
-                remote_id = int(next(v[10:] for v in result.stdout.split() if v.startswith("remote_id=")))
-                line = self.wait_state(token, "ready")
-                self.assertIn(f"remote_id={remote_id}", line)
-                with socket.create_connection((local if mode == "forward" else "127.0.0.1", listen), timeout=4) as client:
-                    client.sendall(b"endpoint")
-                    peer, _ = target.accept()
-                    with peer:
-                        peer.settimeout(4)
-                        self.assertEqual(peer.recv(8, socket.MSG_WAITALL), b"endpoint")
-                        peer.sendall(b"ok")
-                        self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
-                self.cli("-tunnel", "-stop", "-id", token)
+    def test_numbered_endpoint_real_forward_transfer(self):
+        with socket.socket() as target:
+            local = "127.0.0.2"
+            target.bind(("127.0.0.1", 0))
+            target.listen()
+            target.settimeout(4)
+            listen = unused_port()
+            result = self.cli("-tunnel", "-forward", "-ip", local, "-local-port", str(listen),
+                              "-remote-domain", "ssh.example.test", "-remote-port", str(target.getsockname()[1]))
+            token = result.stdout.split()[0].split("=")[1]
+            line = self.wait_state(token, "ready")
+            self.assertIn("remote_id=", line)
+            with socket.create_connection((local, listen), timeout=4) as client:
+                client.sendall(b"endpoint")
+                peer, _ = target.accept()
+                with peer:
+                    peer.settimeout(4)
+                    self.assertEqual(peer.recv(8, socket.MSG_WAITALL), b"endpoint")
+                    peer.sendall(b"ok")
+                    self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
+            self.cli("-tunnel", "-stop", "-id", token)
+
+    def test_two_vps_reverse_spec_real_openssh_payload(self):
+        # Exercise the production reverse argument against the fixture sshd.
+        # This does not execute root provisioning or systemd in CI.
+        from thirtyna.two_vps import reverse_spec
+        with socket.socket() as target:
+            target.bind(("127.0.0.1", 0))
+            target.listen()
+            target.settimeout(5)
+            listen = unused_port()
+            spec = reverse_spec(dict(local="127.0.0.1", local_port=listen,
+                                     remote_port=target.getsockname()[1]))
+            proc = subprocess.Popen([self.real_ssh, "-F", str(self.config), "-NT",
+                                     "-o", "BatchMode=yes", "-o", "ExitOnForwardFailure=yes",
+                                     "-R", spec, "127.0.0.1"],
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+            self.addCleanup(proc.stderr.close)
+            self.addCleanup(self.stop_daemon, proc)
+            deadline = time.monotonic() + 5
+            client = None
+            while time.monotonic() < deadline:
+                if proc.poll() is not None:
+                    self.fail(proc.stderr.read().decode(errors="replace"))
+                try:
+                    client = socket.create_connection(("127.0.0.1", listen), timeout=0.2)
+                    break
+                except OSError:
+                    time.sleep(0.05)
+            self.assertIsNotNone(client)
+            with client:
+                client.settimeout(5)
+                client.sendall(b"reverse")
+                peer, _ = target.accept()
+                with peer:
+                    peer.settimeout(5)
+                    self.assertEqual(peer.recv(7, socket.MSG_WAITALL), b"reverse")
+                    peer.sendall(b"ok")
+                    self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")

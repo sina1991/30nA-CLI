@@ -72,7 +72,7 @@ def tunnel(mode):
                    Field("Remote port", "443", "remote-port")),
                   confirm=True,
                   hint=("Local listener -> remote loopback service." if mode == "forward"
-                        else "Remote loopback listener -> local service."))
+                        else "Remote initiates SSH; Local listener -> remote loopback service."))
 
 
 SYSTEM = ("hostname", "os", "kernel", "uptime", "cpu", "ram", "disk")
@@ -161,6 +161,8 @@ def invoke(args, interactive=False, timeout=15):
         timeout = max(timeout, 60)
     if args[:2] == ["-tunnel", "-discover"]:
         timeout = max(timeout, 180)
+    if args[:2] in (["-tunnel", "-reverse"], ["-tunnel", "-stop"]):
+        timeout = max(timeout, 360)
     enrollment = args[:2] == ["-host", "-add"] and "-onboard" in args
     if enrollment:
         timeout = max(timeout, 450 if interactive else 180)
@@ -465,7 +467,7 @@ class Dashboard:
                           self.active if selected else self.normal, fill=selected, limit=region.width)
         if self.confirming:
             prompt = self.action.title
-            if self.action.args[:2] == ("-tunnel", "-forward") and self.values[0] != "1":
+            if self.action.args[:2] in (("-tunnel", "-forward"), ("-tunnel", "-reverse")) and self.values[0] != "1":
                 prompt = "Bind listener on " + self.values[0] + " (review exposure)"
             self.draw(h-4, 0, " CONFIRM: " + prompt + "? ", self.warning, True)
         else:
@@ -553,7 +555,7 @@ class Dashboard:
                     remote_ep = next((v[7:] for v in words if v.startswith("remote=")), "")
                     direction = "F" if words[1] == "forward" else "R"
                     if local_ep and remote_ep:
-                        ports = local_ep.rsplit(":", 1)[-1] + (">" if direction == "F" else "<") + remote_ep.rsplit(":", 1)[-1]
+                        ports = local_ep.rsplit(":", 1)[-1] + ("<" if "legacy_topology=yes" in words else ">") + remote_ep.rsplit(":", 1)[-1]
                     else:
                         ports = ":" + words[3]
                     rows.append(f"{direction} {state.upper()} #{remote} {ports}")

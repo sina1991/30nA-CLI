@@ -184,7 +184,7 @@ def state_dir():
 
 @contextmanager
 def locked(create=False):
-    if not create and not (folder() / "two-vps").exists():
+    if not create and not (folder() / "two-vps").exists() and not (folder() / "two-vps").is_symlink():
         yield None, {}
         return
     directory = state_dir()
@@ -263,6 +263,11 @@ def cleanup(row):
     if row.get("remote_attempt"):
         remote(row, "stop")
     if row.get("local_attempt"):
+        deadline = time.monotonic() + 5
+        while listener(row):
+            if time.monotonic() >= deadline:
+                raise RuntimeError("Owned reverse listener still present; retry stop")
+            time.sleep(0.2)
         clean_local(row)
 
 

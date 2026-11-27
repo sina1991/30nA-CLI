@@ -484,22 +484,23 @@ class TunnelTests(unittest.TestCase):
                  "-remote-port", "443", code=2)
         self.assertFalse((self.root / "ssh_calls").exists())
 
-    def test_modern_reverse_maps_ports_and_registers_explicit_remote(self):
-        listen = unused_port()
-        out = self.cli("-tunnel", "-reverse", "-localhost", "-id", "1", "-local-port", "443",
-                       "-remote-ip/domain", self.host, "-remote-port", str(listen)).stdout
-        token = out.split()[0].split("=")[1]
-        item = self.wait_state(token, "ready")
-        self.assertEqual(item["local_port"], 443)
-        self.assertEqual(item["remote_port"], listen)
-        self.assertEqual(item["remote_id"], 2)
-        self.assertEqual(item["listen"], listen)
-        self.assertEqual(item["target_port"], 443)
-        self.assertIn("2 REMOTE " + self.host, self.cli("-host", "-list", "-ids").stdout)
-        calls = [json.loads(line)["args"] for line in (self.root / "ssh_calls").read_text().splitlines()]
-        args = next(args for args in calls if "-R" in args)
-        self.assertIn(f"127.0.0.1:{listen}:127.0.0.1:443", args)
-        self.cli("-tunnel", "-stop", "-id", token)
+    def test_modern_reverse_dispatches_to_remote_engine_not_worker(self):
+        import contextlib
+        import io
+        from unittest.mock import patch
+        from thirtyna.agents import tunnel
+        self.register()
+        with patch.dict(os.environ, self.env), patch("thirtyna.two_vps.start") as start:
+            start.side_effect = lambda p: dict(p, id="a"*24, pid=123, state="ready")
+            with contextlib.redirect_stdout(io.StringIO()) as output:
+                tunnel.run(["-reverse", "-localhost", "-id", "1", "-local-port", "5555",
+                            "-remote-id", "2", "-remote-port", "443"])
+            params = start.call_args.args[0]
+            self.assertEqual(params["local_port"], 5555)
+            self.assertEqual(params["remote_port"], 443)
+            self.assertEqual(params["host"], self.host)
+            self.assertIn("ssh_client=remote", output.getvalue())
+        self.assertFalse((self.root / "ssh_calls").exists())
 
     def test_modern_direct_alias_and_clean_listing(self):
         listen = unused_port()

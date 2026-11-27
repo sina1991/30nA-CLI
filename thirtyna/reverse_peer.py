@@ -54,6 +54,8 @@ def execute(op, data):
         marker.write_text(token)
         run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)])
         return {"public": key.with_suffix(".pub").read_text().strip()}
+    if BASE.is_symlink() or (BASE.exists() and (BASE.stat().st_uid != 0 or BASE.stat().st_mode & 0o077)):
+        raise RuntimeError("Unsafe reverse key directory")
     if not directory.exists() and not directory.is_symlink():
         if op == "stop" and not unitfile.exists() and not unitfile.is_symlink():
             return {"stopped": True}

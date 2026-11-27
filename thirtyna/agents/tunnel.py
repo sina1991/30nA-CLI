@@ -111,12 +111,11 @@ def run(argv):
             raise UsageError("-list takes no additional options")
         parameters = None
         operation = "list"
-    agent = control("ensure", "tunnel", bootstrap=True)
-    if agent.get("tunnel_protocol") != 2:
-        raise RuntimeError("Restart Service Agent before using this Tunnel release")
+    from thirtyna import two_vps
+    if operation == "stop" and two_vps.stop(parameters["id"]):
+        print("stopped " + parameters["id"])
+        return 0
     if modern and operation == "start":
-        if agent.get("endpoint_protocol") != 1:
-            raise RuntimeError("Restart Service Agent before using local/remote endpoints")
         host_agent = control("ensure", "host", bootstrap=True)
         if host_agent.get("endpoint_protocol") != 1:
             raise RuntimeError("Restart Service Agent before using numbered hosts")
@@ -127,6 +126,16 @@ def run(argv):
             remote_id = args.remote_id
             remote_host = request(host_agent, "lookup", remote_id)["value"]
         parameters.update(host=remote_host, remote_id=remote_id)
+        if direction == "reverse":
+            result = two_vps.start(parameters)
+            print("id={id} pid={pid} state={state}".format(**result))
+            print(describe_endpoints(result) + " ssh_client=remote unit=" + two_vps.unit(result))
+            return 0
+    agent = control("ensure", "tunnel", bootstrap=True)
+    if agent.get("tunnel_protocol") != 2:
+        raise RuntimeError("Restart Service Agent before using this Tunnel release")
+    if modern and operation == "start" and agent.get("endpoint_protocol") != 1:
+        raise RuntimeError("Restart Service Agent before using local/remote endpoints")
     if operation == "start" and is_domain(parameters["host"]) and not agent.get("domain_support"):
         raise RuntimeError("Restart Service Agent before using domain names")
     if agent.get("recovery_warning"):
@@ -134,11 +143,15 @@ def run(argv):
         print("30na: " + agent["recovery_warning"], file=sys.stderr)
     result = request(agent, operation, parameters)["value"]
     if operation == "list":
-        for row in result:
+        for row in [*result, *two_vps.list_rows()]:
             if row.get("remote_id") is not None:
                 line = "{id} {mode} ".format(**row) + describe_endpoints(row) + " pid={pid} state={state}".format(**row)
             else:
                 line = "{id} {mode} {host} {listen} {target}:{target_port} pid={pid} state={state}".format(**row)
+            if row.get("engine") == "two-vps":
+                line += " ssh_client=remote unit=" + two_vps.unit(row) + " persistent=yes"
+            elif row.get("remote_id") is not None and row["mode"] == "reverse":
+                line += " legacy_topology=yes"
             if row.get("reason"):
                 line += " reason=" + row["reason"]
             if row.get("restore"):
