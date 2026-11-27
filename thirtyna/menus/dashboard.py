@@ -160,7 +160,7 @@ def invoke(args, interactive=False, timeout=15):
     if args[:2] == ["-port", "-force"]:
         timeout = max(timeout, 60)
     if args[:2] == ["-tunnel", "-discover"]:
-        timeout = max(timeout, 160)
+        timeout = max(timeout, 180)
     enrollment = args[:2] == ["-host", "-add"] and "-onboard" in args
     if enrollment:
         timeout = max(timeout, 450 if interactive else 180)

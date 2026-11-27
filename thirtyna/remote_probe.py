@@ -92,7 +92,9 @@ def listening():
             for name, pid in re.findall(r'"(ssh|sshd|sshd-session)",pid=(\d+)', parts[5]):
                 owners.append([name, int(pid)])
         rows.append(dict(port=int(port), addr=addr, owners=owners))
-    return rows[:4096]
+    if len(rows) > 4096:
+        raise RuntimeError("Listener inventory exceeds supported limit")
+    return rows
 
 
 def probe():

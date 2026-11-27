@@ -39,7 +39,7 @@ def validate(value):
                 if name not in ("ssh", "sshd", "sshd-session") or type(pid) is not int or pid <= 0:
                     raise ValueError("Invalid listener owner")
     for row in value["units"]:
-        if not UNIT.fullmatch(row["unit"]) or type(row["recognized"]) is not bool:
+        if not isinstance(row, dict) or not UNIT.fullmatch(row["unit"]) or type(row["recognized"]) is not bool:
             raise ValueError("Invalid unit")
         if not row["recognized"]:
             continue
@@ -74,7 +74,7 @@ def collect(address=None, key=None):
         if result.returncode or len(result.stdout) > 262144:
             return None
         return validate(json.loads(result.stdout))
-    except (OSError, RuntimeError, ValueError, TypeError, KeyError, subprocess.SubprocessError):
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError, AttributeError, subprocess.SubprocessError):
         return None
 
 
