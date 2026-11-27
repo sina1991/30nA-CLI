@@ -56,3 +56,5 @@ Host additions require verified key-only SSH from the current controller. Enroll
 Host addition now also installs the application and Ubuntu dependencies on the remote root account before inventory registration. The remote installation selects an exact official main commit and checks ancestry against an existing installed revision. Tunnel access checks omit installation.
 
 Host addition optionally transfers ~/30na-SSH-Backup.zip to the authenticated peer, obtains its password through a native 7z TTY prompt, and validates/restores the shared SSH identity before registering the host. Existing differing key files receive private backups.
+
+Test Agent adds -test for isolated VLESS profile benchmarks with selection, route labels and per-attempt/aggregate reports. The existing local Xray installation and profiles file are reused.
