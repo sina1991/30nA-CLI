@@ -57,12 +57,6 @@ class Action:
                 if value not in ("tcp", "udp"):
                     raise ValueError("Protocol must be tcp or udp")
                 args.append("-" + value)
-            elif part == "@restore":
-                value = values[-1].lower()
-                if value not in ("yes", "no"):
-                    raise ValueError("Restore must be yes or no")
-                if value == "yes":
-                    args.append("-restore")
             else:
                 args.append(part)
         return args
@@ -198,7 +192,7 @@ class Snapshot:
 
     def invalidate(self, args):
         if args and args[0] == "-port" and "-force" in args:
-            self.ports = self.port_rows = self.services = self.workers = None
+            self.ports = self.port_rows = self.services = self.managed = self.workers = None
             self.tunnels = self.tunnel_time = None
             self.tunnel_rows = []
         if args and (args[0] == "-tunnel" and "-list" not in args or
@@ -209,6 +203,9 @@ class Snapshot:
             self.host_rows = []
             self.numbered_hosts = None
         if args and args[0] == "-tunnel" and "-list" not in args:
+            self.hosts = self.host_time = None
+            self.host_rows = []
+            self.numbered_hosts = None
             self.tunnels = self.tunnel_time = None
             self.tunnel_rows = []
         if args and args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-managed", "-status", "-logs", "-help"):
@@ -229,6 +226,7 @@ class Snapshot:
         elif args == ["-host", "-list"]:
             self.hosts = self.host_time = None
             self.host_rows = []
+            self.numbered_hosts = None
             if result.code == 0 and not result.truncated:
                 self.host_rows = result.stdout.splitlines()
                 self.hosts = len(self.host_rows)
@@ -591,7 +589,7 @@ class Dashboard:
             self.status = "ERROR refresh"
             self.detail = "Counts incomplete; open agent list for details"
         else:
-            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.workers is None or self.snapshot.ports is None else "Counts refreshed")
+            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.managed is None or self.snapshot.workers is None or self.snapshot.ports is None else "Counts refreshed")
 
     def open_picker(self):
         field = self.action.fields[self.index]

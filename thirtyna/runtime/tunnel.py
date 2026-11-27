@@ -32,7 +32,7 @@ def _parameters(argument):
         host = host_address(argument["host"])
         if "remote_id" in argument:
             from thirtyna.endpoints import local_ip
-            local = local_ip(argument["local"])
+            local = local_ip(argument["local"], check_assigned=False)
             remote_id = argument["remote_id"]
             lp, rp = int(argument["local_port"]), int(argument["remote_port"])
             if type(remote_id) is not int or remote_id < 2 or mode not in ("forward", "reverse") or not (1 <= lp <= 65535 and 1 <= rp <= 65535):
@@ -129,6 +129,9 @@ def initialize(recovery_fd, directory, host_info):
 
 
 def _launch(token, parameters, restore):
+    if "remote_id" in parameters:
+        from thirtyna.endpoints import local_ip
+        local_ip(parameters["local"])
     directory = tempfile.mkdtemp(prefix="s-", dir=_SOCKET_ROOT)
     item = dict(directory=directory, socket=os.path.join(directory, "s"),
                 master=None, forward=None, master_log=None, forward_log=None,

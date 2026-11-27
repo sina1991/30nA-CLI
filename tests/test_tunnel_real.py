@@ -256,3 +256,29 @@ Host 127.0.0.1 ssh.example.test
                     peer.sendall(b"ok")
                     self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
             self.cli("-tunnel", "-stop", "-id", token)
+
+    def test_numbered_endpoints_real_forward_reverse_transfer(self):
+        for mode in ("forward", "reverse"):
+            with self.subTest(mode=mode), socket.socket() as target:
+                local = "127.0.0.2"
+                target.bind(("127.0.0.1" if mode == "forward" else local, 0))
+                target.listen()
+                target.settimeout(4)
+                listen = unused_port()
+                lp, rp = (listen, target.getsockname()[1]) if mode == "forward" else (target.getsockname()[1], listen)
+                endpoint = ("-remote-domain", "ssh.example.test") if mode == "forward" else ("-remote-id", str(remote_id))
+                result = self.cli("-tunnel", "-" + mode, "-ip", local, "-local-port", str(lp),
+                                  *endpoint, "-remote-port", str(rp))
+                token = result.stdout.split()[0].split("=")[1]
+                remote_id = int(next(v[10:] for v in result.stdout.split() if v.startswith("remote_id=")))
+                line = self.wait_state(token, "ready")
+                self.assertIn(f"remote_id={remote_id}", line)
+                with socket.create_connection((local if mode == "forward" else "127.0.0.1", listen), timeout=4) as client:
+                    client.sendall(b"endpoint")
+                    peer, _ = target.accept()
+                    with peer:
+                        peer.settimeout(4)
+                        self.assertEqual(peer.recv(8, socket.MSG_WAITALL), b"endpoint")
+                        peer.sendall(b"ok")
+                        self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
+                self.cli("-tunnel", "-stop", "-id", token)

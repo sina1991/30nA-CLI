@@ -52,3 +52,15 @@ class SystemctlTests(unittest.TestCase):
         self.assertEqual([call.args[0] for call in print_mock.call_args_list],
                          ["host ready", "supervisor running", "port reported", "tunnel down"])
         self.assertTrue(all(call.kwargs == {"bootstrap": False} for call in control.call_args_list))
+
+    def test_managed_unit_history_is_local_and_persistent(self):
+        import tempfile
+        import os
+        with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"XDG_DATA_HOME": tmp}):
+            self.assertEqual(systemctl.managed_units(), [])
+            systemctl.managed_units("start", "example.service")
+            systemctl.managed_units("restart", "example.service")
+            systemctl.managed_units("start", "second.service")
+            self.assertEqual(systemctl.managed_units(), ["example.service", "second.service"])
+            systemctl.managed_units("stop", "example.service")
+            self.assertEqual(systemctl.managed_units(), ["second.service"])
