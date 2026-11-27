@@ -316,3 +316,18 @@ Host 127.0.0.1 ssh.example.test
                     self.assertEqual(peer.recv(7, socket.MSG_WAITALL), b"reverse")
                     peer.sendall(b"ok")
                     self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
+
+    def test_reverse_scoped_sshd_policy_parses_with_real_sshd(self):
+        from thirtyna.two_vps import policy
+        config = self.root / "policy_config"
+        original = (self.root / "sshd_config").read_text()
+        row = dict(id="a"*24, local="127.0.0.1", local_port=5555)
+        config.write_text(original + "\n" + policy(row))
+        sshd = shutil.which("sshd") or "/usr/sbin/sshd"
+        result = subprocess.run(["sudo", "-n", sshd, "-T", "-f", str(config), "-C",
+                                 "user=ntr-" + row["id"] + ",host=peer,addr=127.0.0.1"],
+                                capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for setting in ("allowtcpforwarding remote", "gatewayports clientspecified",
+                        "maxsessions 0", "permitlisten 127.0.0.1:5555", "permitopen none"):
+            self.assertIn(setting, result.stdout.splitlines())

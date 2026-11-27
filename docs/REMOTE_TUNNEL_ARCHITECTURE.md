@@ -9,7 +9,7 @@
 | Listener | Local Port | Local Port |
 | Destination | Remote loopback:Remote Port | Remote loopback:Remote Port |
 
-جهت جریان کاربر در هر دو حالت Local → Remote است. قرارداد فعلی worker برای Reverse قدیمی این جهت را ندارد؛ به‌صورت خودکار تغییر یا تبدیل نمی‌شود. جایگزینی ساخت Tunnel هنوز پیاده‌سازی نشده است.
+جهت جریان کاربر در هر دو حالت Local → Remote است. قرارداد فعلی worker برای Reverse قدیمی این جهت را ندارد؛ به‌صورت خودکار تغییر یا تبدیل نمی‌شود. موتور Reverse جدید برای قرارداد شماره‌دار در این شاخه پیاده‌سازی شده است؛ رکوردهای قدیمی با legacy_topology=yes نمایش داده می‌شوند.
 
 ## مرحله اول: مشاهده سرویس‌های موجود
 
@@ -25,9 +25,17 @@ Machine ID هش‌شده، IPهای رابط، آدرس SSH و نتیجه DNS ب
 
 حداکثر 16 Remote در هر بررسی و 64 Unit شناخته‌شده در هر Host؛ خطا و داده ناقص به‌صورت UNKNOWN/PARTIAL و Exit 1 گزارش می‌شود. حالت COMPLETE فقط پوشش بررسی پشتیبانی‌شده است، نه سلامت Tunnel.
 
-## مرحله بعد: ساخت مدیریت‌شده
+## Reverse مدیریت‌شده
 
-- بعد از پذیرش Onboarding و کشف خواندنی، مدل پایدار دو VPS با کلید اختصاصی تولیدشده روی SSH client، حساب محدود روی SSH server و کنترل Host Key دقیق.
-- اعتبارسنجی سیاست sshd و پورت قبل از تغییر، عدم توقف سرویس خارجی، ثبت مالکیت و مراحل rollback در داده پایدار.
-- واحد Systemd اختصاصی روی SSH client واقعی، تایید Listener و تست انتقال TCP مستقل. در Reverse Listener روی Local است.
-- حذف فقط منابع متعلق به Tunnel جدید، حفظ رکورد cleanup در صورت شکست. تست OpenSSH واقعی با دو endpoint ایزوله، و تست Systemd/sshd policy بدون تغییر سرور عملیاتی.
+```bash
+clear
+30na -tunnel -reverse -ip 192.0.2.1 -local-port 5555 -remote-id 2 -remote-port 443
+30na -tunnel -list
+30na -tunnel -stop -id TUNNEL_ID
+```
+
+آدرس نمونه را با IPv4 واقعی Local جایگزین کنید. موتور ابتدا با کلید مدیریت معتبر به Remote وصل می‌شود و Machine ID، root و پورت Local را بررسی می‌کند. کلید اختصاصی روی Remote ساخته می‌شود. حساب محدود ntr-ID روی Local با Match User و PermitListen دقیق، MaxSessions 0 و AllowTcpForwarding remote ایجاد می‌شود. فقط public key مبادله می‌شود. sshd -t و sshd -T قبل از reload بررسی می‌شوند. تغییر فقط برای حساب اختصاصی است؛ هیچ سرویس قبلی Stop یا Restart نمی‌شود. Root، Ubuntu/systemd، SSH پورت 22 و IPv4 قابل دسترس Local لازم‌اند؛ برای Local ID 1 پیش‌فرض Loopback است و اگر چند IP وجود دارد باید -ip مشخص شود. IPv6 و SSH port سفارشی Local در این نسخه پشتیبانی نمی‌شوند.
+
+روی Remote واحد 30na-tunnel-ID.service با Restart=always و Host Key صریح Local ساخته و فعال می‌شود. Listener روی Local Port باید به حساب اختصاصی تعلق داشته باشد تا ready گزارش شود؛ این تأیید انتقال end-to-end به Xray نیست. Stop فقط Unit و فایل‌ها و حساب همان ID را پاک می‌کند. شکست cleanup باعث حفظ رکورد می‌شود. Reverse جدید مستقل از عمر Worker است و -restore نمی‌گیرد؛ Forward قبلی بدون تغییر باقی می‌ماند. فهرست ترکیبی است و Legacy Reverse به‌صورت خودکار تبدیل نمی‌شود.
+
+آزمون‌های orchestration با منابع شبیه‌سازی‌شده، parser واقعی sshd و انتقال TCP با OpenSSH واقعی loopback انجام می‌شوند. اجرای کامل root provisioning روی دو VPS واقعی و سلامت VPN کاربر نیاز به پذیرش عملیاتی دارند. هیچ Tunnel خارجی به‌طور خودکار Adopt نمی‌شود.

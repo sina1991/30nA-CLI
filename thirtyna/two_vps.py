@@ -209,6 +209,11 @@ def save(path, rows):
         stream.flush()
         os.fsync(stream.fileno())
     pending.replace(path)
+    fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
 
 
 def listener(row):
