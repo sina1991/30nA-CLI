@@ -47,3 +47,8 @@ PR #13 discovery: 111/111 on tested merge tree. New numbered reverse dispatches 
 ## Bootstrap installer
 
 Automated Ubuntu prerequisites, clean main checkout/update and root SSH/key preparation; dependency-free peer deployment remains unchanged. CI required for exact head.
+
+
+## Release candidate preparation
+
+Host additions require verified key-only SSH from the current controller. Enrollment prepares an Ed25519 management identity on a fresh controller and configures ordinary root SSH login. Tunnel destinations must already be registered and pass SSH verification. Temporary Forward remains a compatibility CLI path; the primary menu creates persistent Forward and Reverse services. The first tagged release candidate is v1.0.0-rc.1, published only after successful main Linux regression. Final multi-machine chain and reboot validation remain the operator acceptance step.
