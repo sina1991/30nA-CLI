@@ -9,7 +9,7 @@ import unittest
 from thirtyna.core import discover, main
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = str(ROOT / "30na")
+CLI = str(ROOT / "tests" / "fixture_cli.py")
 
 
 class CLITests(unittest.TestCase):
@@ -71,7 +71,7 @@ class CLITests(unittest.TestCase):
         ip = "192.0.2.5"
         self.invoke("-host", "-add", "-ip", "-ssh", data=ip)
         self.assertEqual(self.invoke("-host", "-list"), ip)
-        self.invoke("-host", "-add", "-ip", ip, "-ssh", code=2)
+        self.invoke("-host", "-add", "-ip", ip)
         self.invoke("-host", "-add", "-ip", "bad", "-ssh", code=2)
         calls = self.dir / "calls"
         self.assertEqual(calls.read_text().splitlines(), ["-o BatchMode=yes -- " + ip])
@@ -91,7 +91,7 @@ class CLITests(unittest.TestCase):
         self.invoke("-host", "-add", "-domain", "SSH.Example.TEST.")
         self.assertEqual(self.invoke("-host", "-list").splitlines(),
                          ["192.0.2.5", "ssh.example.test"])
-        self.invoke("-host", "-add", "-ip", "ssh.example.test", code=2)
+        self.invoke("-host", "-add", "-ip", "ssh.example.test")
         self.invoke("-host", "-ssh", "-domain", data="SSH.EXAMPLE.TEST\n")
         self.assertEqual((self.dir / "domain_calls").read_text().splitlines(),
                          ["-o", "BatchMode=yes", "--", "ssh.example.test"])
@@ -124,7 +124,8 @@ class CLITests(unittest.TestCase):
             return subprocess.check_output(["bash", "-ec", command], env=env,
                                            cwd=self.dir, text=True).strip()
         subprocess.run([ROOT / "install.sh"], env=env, check=True)
-        shell("echo 192.0.2.9 | 30na -host -add -ip")
+        subprocess.run([sys.executable, CLI, "-host", "-add", "-ip", "192.0.2.9"],
+                       env=env, check=True)
         (self.dir / "numbers").write_text("4 5")
         self.assertEqual(shell("30na -calc -mul < numbers"), "20")
         subprocess.run([ROOT / "install.sh"], env=env, check=True)

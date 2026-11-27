@@ -16,7 +16,7 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = str(ROOT / "30na")
+CLI = str(ROOT / "tests" / "fixture_cli.py")
 
 
 def unused_port():

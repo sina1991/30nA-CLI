@@ -16,10 +16,11 @@ REMOTE_MACHINE = b"1234567890abcdef1234567890abcdef"
 
 
 class EnrollmentTests(unittest.TestCase):
+    @patch("thirtyna.onboarding.configure_login")
     @patch("thirtyna.onboarding.authenticate")
     @patch("thirtyna.onboarding.import_identity", return_value=KEY)
     @patch("thirtyna.onboarding.subprocess.run")
-    def test_enrollment_requires_only_ssh_access(self, run, key, auth):
+    def test_enrollment_requires_only_ssh_access(self, run, key, auth, configure):
         onboarding.enroll("ssh.example.test")
         auth.assert_called_once()
         self.assertEqual(auth.call_args.args[:2], ("ssh.example.test", KEY))
@@ -128,3 +129,28 @@ class RequiredEnrollmentTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "SSH key login failed"):
             host.run(["-add", "-ip", "192.0.2.1"])
         request.assert_not_called()
+
+
+class OrdinaryLoginTests(unittest.TestCase):
+    def test_config_is_parsed_by_openssh_and_repeated_registration_is_stable(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            ssh = Path(temp)
+            directory = ssh / "30na-management"
+            directory.mkdir()
+            key = directory / "identity"
+            config = ssh / "config"
+            config.write_text("Host existing.example\n    User operator\n")
+            original = config.read_text()
+            with patch("thirtyna.onboarding.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess([], 0)
+                onboarding.configure_login("new.example", key)
+                first = config.read_text()
+                onboarding.configure_login("new.example", key)
+                self.assertEqual(config.read_text(), first)
+            result = subprocess.run(["ssh", "-G", "-F", str(config), "root@new.example"],
+                                    capture_output=True, text=True, check=True)
+            self.assertIn("identityfile " + str(key), result.stdout)
+            self.assertIn("identitiesonly yes", result.stdout)
+            self.assertTrue(config.read_text().endswith(original))
+            self.assertEqual(config.stat().st_mode & 0o777, 0o600)

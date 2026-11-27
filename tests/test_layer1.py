@@ -11,7 +11,7 @@ import tempfile
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = str(ROOT / "30na")
+CLI = str(ROOT / "tests" / "fixture_cli.py")
 MODULE = "thirtyna.runtime.service"
 
 
@@ -75,12 +75,12 @@ class LayerTests(unittest.TestCase):
         self.ready()
 
     def test_b_process(self):
-        for op, args in [("add", ["-add", "-ip", "192.0.2.8"]), ("list", ["-list"])]:
+        for op, args in [("register", ["-add", "-ip", "192.0.2.8"]), ("list", ["-list"])]:
             pid, out, _ = self.run_cli(*args)
             info = self.ready()
             self.assertEqual(info["last"], dict(requester=pid, processor=info["pid"], op=op))
             self.assertNotEqual(pid, info["pid"])
-            self.assertEqual(out, "" if op == "add" else "192.0.2.8\n")
+            self.assertEqual(out, "HOST_ID 2 REMOTE 192.0.2.8\n" if op == "register" else "192.0.2.8\n")
 
     def test_c_parallel(self):
         for valid in (False, True):

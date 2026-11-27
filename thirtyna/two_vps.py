@@ -344,8 +344,32 @@ def clean_local(row):
         user = pwd.getpwnam(account(row))
     except KeyError:
         return
-    if user.pw_gecos != "30na-reverse-" + row["id"]:
+    if user.pw_uid == 0 or user.pw_gecos != "30na-reverse-" + row["id"]:
         raise RuntimeError("Local account ownership changed")
+    # The account belongs exclusively to this tunnel. Remaining session
+    # processes can outlive its forwarding listener.
+    processes = []
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdecimal():
+            continue
+        try:
+            ids = next(line.split()[1:] for line in (proc / "status").read_text().splitlines()
+                       if line.startswith("Uid:"))
+            if str(user.pw_uid) in ids:
+                processes.append(int(proc.name))
+        except (OSError, StopIteration):
+            continue
+    import signal
+    for pid in processes:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if not any(Path("/proc", str(pid)).exists() for pid in processes):
+            break
+        time.sleep(0.1)
     command(["userdel", account(row)])
 
 

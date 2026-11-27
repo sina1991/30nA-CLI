@@ -90,5 +90,54 @@ def enroll(address, interactive=False):
     key = import_identity()
     try:
         authenticate(address, key, controller, interactive)
+        configure_login(address, key)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("SSH enrollment timed out") from exc
+
+
+def configure_login(address, key):
+    """Select the verified management key for ordinary SSH from this account."""
+    import fcntl
+    import tempfile
+
+    ssh = key.parent.parent
+    config = ssh / "config"
+    lock = ssh / ".30na-config.lock"
+    with lock.open("a") as stream:
+        fcntl.flock(stream, fcntl.LOCK_EX)
+        if config.is_symlink():
+            raise RuntimeError("Refusing symlink SSH config")
+        if config.exists():
+            import stat
+            info = config.stat()
+            if not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or info.st_mode & 0o022:
+                raise RuntimeError("Unsafe SSH config ownership or permissions")
+        original = config.read_text() if config.exists() else ""
+        begin = "# BEGIN 30na " + address
+        end = "# END 30na " + address
+        block = (begin + "\nHost " + address + "\n    User root\n"
+                 '    IdentityFile "' + str(key).replace("\\", "\\\\").replace('"', '\\"') +
+                 '"\n    IdentitiesOnly yes\n    StrictHostKeyChecking yes\n' + end + "\n")
+        if begin in original:
+            start = original.index(begin)
+            finish = original.find(end, start)
+            if finish < 0:
+                raise RuntimeError("Incomplete managed SSH configuration")
+            original = original[:start] + original[finish + len(end):].lstrip("\n")
+        updated = block + ("Host *\n" if not original.startswith("Host *\n") else "") + original
+        fd, temporary = tempfile.mkstemp(dir=ssh, prefix=".30na-config-")
+        try:
+            with os.fdopen(fd, "w") as output:
+                output.write(updated)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, config)
+        finally:
+            Path(temporary).unlink(missing_ok=True)
+    result = subprocess.run(
+        ["ssh", "-T", "-o", "BatchMode=yes", "-o", "ConnectTimeout=8",
+         "-o", "ClearAllForwardings=yes", "root@" + address, "true"],
+        stdin=subprocess.DEVNULL, capture_output=True, timeout=15
+    )
+    if result.returncode:
+        raise RuntimeError("Ordinary SSH login verification failed")
