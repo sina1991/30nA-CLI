@@ -125,7 +125,7 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(actions["Host"][2].confirm)
         self.assertEqual(actions["Host"][2].command(["ssh.example.test"]),
                          ["-host", "-add", "-domain", "ssh.example.test", "-onboard", "-password"])
-        self.assertEqual(len(actions["Tunnel"]), 5)
+        self.assertEqual(len(actions["Tunnel"]), 9)
         self.assertEqual(actions["Tunnel"][3].command([]), ["-tunnel", "-discover"])
         self.assertEqual(len(actions["Help"]), 8)
         self.assertEqual(len(actions["Ports"]), 8)
@@ -199,7 +199,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.ui.page, "home")
 
     def test_stop_requires_confirmation_and_picker(self):
-        self.keys("4", "k", "\n", "f", "j", "\n", "j", "\n")
+        self.keys("4", "j", "j", "j", "j", "\n", "f", "j", "\n", "j", "\n")
         self.assertTrue(self.ui.confirming)
         self.keys("n")
         self.assertEqual(self.calls, [(["-tunnel", "-list"], False)])

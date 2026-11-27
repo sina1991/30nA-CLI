@@ -79,18 +79,27 @@ def execute(op, data):
         run(["systemctl", "daemon-reload"])
         run(["systemctl", "enable", "--now", unit])
         return {"active": run(["systemctl", "is-active", unit], check=False)}
-    if op == "stop":
+    if op in ("stop", "pause", "resume", "restart"):
         if unitfile.is_symlink():
             raise RuntimeError("Refusing symlink unit")
         if unitfile.exists():
             if not unitfile.read_text().startswith("[Unit]\nDescription=30nA managed reverse " + token + "\n"):
                 raise RuntimeError("Remote unit ownership changed")
+            if op in ("resume", "restart"):
+                run(["systemctl", "enable", "--now", unit])
+                if op == "restart":
+                    run(["systemctl", "restart", unit])
+                return {"active": True}
             run(["systemctl", "disable", "--now", unit])
             state = run(["systemctl", "is-active", unit], check=False)
             if state not in ("inactive", "failed", "unknown"):
                 raise RuntimeError("Remote unit not stopped")
+            if op == "pause":
+                return {"stopped": True}
             unitfile.unlink()
             run(["systemctl", "daemon-reload"])
+        if op != "stop":
+            raise RuntimeError("Remote tunnel unit absent")
         shutil.rmtree(directory)
         return {"stopped": True}
     raise RuntimeError("Unknown reverse operation")

@@ -36,7 +36,7 @@ clear
 | --- | --- |
 | نصب روی Ubuntu تازه و به‌روزرسانی | [نصب](docs/INSTALLATION_GUIDE.md) |
 | ثبت Host، کلید عمومی و ورود مجدد | [Host و SSH](docs/HOST_ONBOARDING.md) |
-| ساخت، فهرست و توقف Forward و Reverse | [Tunnel](docs/layer1-tunnel.md) |
+| ایجاد و مدیریت Forward و Reverse پایدار | [راهنمای عملی Tunnel](docs/TUNNEL_QUICKSTART.md) |
 | توپولوژی، پورت‌ها و کشف Tunnel موجود | [معماری Tunnel](docs/REMOTE_TUNNEL_ARCHITECTURE.md) |
 | عیب‌یابی و پذیرش | [عیب‌یابی](docs/TROUBLESHOOTING_GUIDE.md) · [تست](docs/TESTING_GUIDE.md) |
 

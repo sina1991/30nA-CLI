@@ -37,8 +37,9 @@ def verify_identity_config(address, key):
         raise RuntimeError("SSH config includes another certificate identity")
 
 
-def distinct_probe(address, key, controller, interactive=False):
-    result = subprocess.run(["ssh", "-T", *ssh_options(key, interactive),
+def distinct_probe(address, key, controller, interactive=False, isolated=False):
+    config = ["-F", "/dev/null"] if isolated else []
+    result = subprocess.run(["ssh", "-T", *config, *ssh_options(key, interactive),
                              "--", address, "cat /etc/machine-id"],
                             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
                             stderr=None if interactive else subprocess.PIPE, timeout=90 if interactive else 15)

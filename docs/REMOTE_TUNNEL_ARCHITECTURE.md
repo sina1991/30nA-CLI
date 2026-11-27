@@ -31,13 +31,13 @@ Machine ID هش‌شده، IPهای رابط، آدرس SSH و نتیجه DNS ب
 clear
 30na -tunnel -reverse -ip 192.0.2.1 -local-port 5555 -remote-id 2 -remote-port 443
 30na -tunnel -list
-30na -tunnel -stop -id TUNNEL_ID
+30na -tunnel -delete -id TUNNEL_ID
 ```
 
 آدرس نمونه را با IPv4 واقعی Local جایگزین کنید. موتور ابتدا با کلید مدیریت معتبر به Remote وصل می‌شود و Machine ID، root و پورت Local را بررسی می‌کند. کلید اختصاصی روی Remote ساخته می‌شود. حساب محدود ntr-ID روی Local با Match User و PermitListen دقیق، MaxSessions 0 و AllowTcpForwarding remote ایجاد می‌شود. فقط public key مبادله می‌شود. sshd -t و sshd -T قبل از reload بررسی می‌شوند. تغییر فقط برای حساب اختصاصی است؛ هیچ سرویس قبلی Stop یا Restart نمی‌شود. Root، Ubuntu/systemd، SSH پورت 22 و IPv4 قابل دسترس Local لازم‌اند؛ برای Local ID 1 پیش‌فرض Loopback است و اگر چند IP وجود دارد باید -ip مشخص شود. IPv6 و SSH port سفارشی Local در این نسخه پشتیبانی نمی‌شوند.
 
-روی Remote واحد 30na-tunnel-ID.service با Restart=always و Host Key صریح Local ساخته و فعال می‌شود. Listener روی Local Port باید به حساب اختصاصی تعلق داشته باشد تا ready گزارش شود؛ این تأیید انتقال end-to-end به Xray نیست. Stop فقط Unit و فایل‌ها و حساب همان ID را پاک می‌کند. شکست cleanup باعث حفظ رکورد می‌شود. Reverse جدید مستقل از عمر Worker است و -restore نمی‌گیرد؛ Forward قبلی بدون تغییر باقی می‌ماند. فهرست ترکیبی است و Legacy Reverse به‌صورت خودکار تبدیل نمی‌شود.
+روی Remote واحد 30na-tunnel-ID.service با Restart=always و Host Key صریح Local ساخته و فعال می‌شود. Listener روی Local Port باید به حساب اختصاصی تعلق داشته باشد تا ready گزارش شود؛ این تأیید انتقال end-to-end به Xray نیست. Stop واحد را متوقف و از Boot غیرفعال می‌کند. Delete واحد، فایل‌ها و حساب همان ID را پاک می‌کند. شکست cleanup باعث حفظ رکورد می‌شود. Reverse جدید مستقل از عمر Worker است و -restore نمی‌گیرد؛ Forward پایدار با گزینهٔ -persistent ایجاد می‌شود. فهرست ترکیبی است و Legacy Reverse به‌صورت خودکار تبدیل نمی‌شود.
 
 آزمون‌های orchestration با منابع شبیه‌سازی‌شده، parser واقعی sshd و انتقال TCP با OpenSSH واقعی loopback انجام می‌شوند. اجرای کامل root provisioning روی دو VPS واقعی و سلامت VPN کاربر نیاز به پذیرش عملیاتی دارند. هیچ Tunnel خارجی به‌طور خودکار Adopt نمی‌شود.
 
-اگر فایل‌های sshd_config.d در سیاست مؤثر sshd خوانده نشوند، موتور فقط همان Match User محدود به شناسه Reverse را به انتهای sshd_config اضافه می‌کند؛ هیچ wildcard یا تنظیم عمومی جدیدی فعال نمی‌شود. مالکیت و مجوز فایل حفظ می‌شود و جایگزینی اتمی است. سیاست مؤثر پیش از Reload اعتبارسنجی می‌شود. هنگام Stop یا rollback فقط بلوک دقیق همان شناسه حذف می‌شود؛ در صورت تغییر دستی بلوک، cleanup متوقف و رکورد حفظ می‌شود.
+اگر فایل‌های sshd_config.d در سیاست مؤثر sshd خوانده نشوند، موتور فقط همان Match User محدود به شناسه Reverse را به انتهای sshd_config اضافه می‌کند؛ هیچ wildcard یا تنظیم عمومی جدیدی فعال نمی‌شود. مالکیت و مجوز فایل حفظ می‌شود و جایگزینی اتمی است. سیاست مؤثر پیش از Reload اعتبارسنجی می‌شود. هنگام Delete یا rollback فقط بلوک دقیق همان شناسه حذف می‌شود؛ در صورت تغییر دستی بلوک، cleanup متوقف و رکورد حفظ می‌شود.

@@ -44,7 +44,10 @@ def run(argv):
     mode.add_argument("-reverse", action="store_true")
     mode.add_argument("-list", action="store_true")
     mode.add_argument("-discover", action="store_true", help="Read-only inventory of external SSH tunnel services")
-    mode.add_argument("-stop", action="store_true")
+    mode.add_argument("-stop", action="store_true", help="Stop a managed tunnel or end a temporary session")
+    mode.add_argument("-start", action="store_true", help="Start a previously stopped managed tunnel")
+    mode.add_argument("-restart", action="store_true", help="Restart a managed tunnel")
+    mode.add_argument("-delete", action="store_true", help="Delete a managed tunnel and its owned resources")
     endpoint = cli.add_mutually_exclusive_group()
     endpoint.add_argument("-ip", metavar="LOCAL_IP", help="Explicit IP assigned to this server")
     endpoint.add_argument("-localhost", action="store_true", help="Local host ID 1 (loopback)")
@@ -60,7 +63,10 @@ def run(argv):
     cli.add_argument("-target-port", metavar="PORT", help=argparse.SUPPRESS)
     cli.add_argument("-id", metavar="ID", help="Local ID 1 for start; tunnel ID for stop")
     cli.add_argument("-restore", action="store_true", help="Opt in to worker-crash restoration")
+    cli.add_argument("-persistent", action="store_true", help="Run numbered Forward as a boot-enabled systemd service")
     args = cli.parse_args(argv)
+    if args.persistent and (not args.forward or args.remote_id is None or args.restore):
+        raise UsageError("Use -persistent with -forward -remote-id ID and omit -restore")
     if args.discover:
         if any((args.localhost, args.ip is not None, args.remote is not None,
                 args.local_port is not None, args.remote_port is not None,
@@ -101,20 +107,25 @@ def run(argv):
                               listen=port(args.listen), target=address(args.target),
                               target_port=port(args.target_port), restore=args.restore)
         operation = "start"
-    elif args.stop:
+    elif args.stop or args.start or args.restart or args.delete:
         if modern or not args.id or any((args.ip, args.listen, args.target, args.target_port, args.restore)):
-            raise UsageError("Use -stop -id TUNNEL_ID")
+            raise UsageError("Use -stop, -start, -restart or -delete with -id TUNNEL_ID")
         parameters = {"id": args.id}
-        operation = "stop"
+        operation = "stop" if args.stop else "resume" if args.start else "restart" if args.restart else "delete"
     else:
         if modern or any((args.ip, args.listen, args.target, args.target_port, args.id, args.restore)):
             raise UsageError("-list takes no additional options")
         parameters = None
         operation = "list"
-    from thirtyna import two_vps
-    if operation == "stop" and two_vps.stop(parameters["id"]):
-        print("stopped " + parameters["id"])
-        return 0
+    from thirtyna import persistent_forward, two_vps
+    if operation in ("stop", "resume", "restart", "delete"):
+        token = parameters["id"]
+        if persistent_forward.operate(token, operation) or two_vps.operate(token, operation):
+            verb = {"stop": "stopped", "resume": "started", "restart": "restarted", "delete": "deleted"}
+            print(f"{verb[operation]} {token}")
+            return 0
+        if operation != "stop":
+            raise UsageError("Managed tunnel ID not found")
     if modern and operation == "start":
         host_agent = control("ensure", "host", bootstrap=True)
         if host_agent.get("endpoint_protocol") != 1:
@@ -130,6 +141,11 @@ def run(argv):
             result = two_vps.start(parameters)
             print("id={id} pid={pid} state={state}".format(**result))
             print(describe_endpoints(result) + " ssh_client=remote unit=" + two_vps.unit(result))
+            return 0
+        if args.persistent:
+            result = persistent_forward.start(parameters)
+            print("id={id} pid={pid} state={state}".format(**result))
+            print(describe_endpoints(result) + " unit=" + two_vps.unit(result))
             return 0
     agent = control("ensure", "tunnel", bootstrap=True)
     if agent.get("tunnel_protocol") != 2:
@@ -147,13 +163,15 @@ def run(argv):
         print("30na: " + agent["recovery_warning"], file=sys.stderr)
     result = request(agent, operation, parameters)["value"]
     if operation == "list":
-        for row in [*result, *two_vps.list_rows()]:
+        for row in [*result, *persistent_forward.list_rows(), *two_vps.list_rows()]:
             if row.get("remote_id") is not None:
                 line = "{id} {mode} ".format(**row) + describe_endpoints(row) + " pid={pid} state={state}".format(**row)
             else:
                 line = "{id} {mode} {host} {listen} {target}:{target_port} pid={pid} state={state}".format(**row)
             if row.get("engine") == "two-vps":
                 line += " ssh_client=remote unit=" + two_vps.unit(row) + " persistent=yes"
+            elif row.get("engine") == "systemd-forward":
+                line += " ssh_client=local unit=" + two_vps.unit(row) + " persistent=yes"
             elif row.get("remote_id") is not None and row["mode"] == "reverse":
                 line += " legacy_topology=yes"
             if row.get("reason"):
