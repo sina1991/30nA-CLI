@@ -26,6 +26,8 @@ CI و Readiness ادغام شده‌اند. بازیابی محدود بعد ا�
 
 مرجع شواهد و محدوده نهایی: [RELEASE_ACCEPTANCE.md](RELEASE_ACCEPTANCE.md). راهنمای رفع خطا و ارتقا در [TROUBLESHOOTING_GUIDE.md](TROUBLESHOOTING_GUIDE.md) و [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) قرار دارد.
 
-| Endpoint model | Local ID 1, stable remote IDs, fixed local/remote ports; validate current PR CI |
+## Endpoint model
+
+Local ID 1, stable remote IDs, fixed local/remote ports. Validate current PR CI.
 
 نسخه قبلی PR #10 با 85/85 CI تأیید شده است. تغییر قرارداد Tunnel در PR جدید با تست جداگانه بررسی می‌شود.

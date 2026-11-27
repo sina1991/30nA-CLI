@@ -158,7 +158,11 @@ def _restore_pending(token, item):
     try:
         spec = _parameters(item["info"])
         _authorize(spec["host"], spec.get("remote_id"))
-        _TUNNELS[token] = _launch(token, spec, True)
+        try:
+            _TUNNELS[token] = _launch(token, spec, True)
+        except UsageError:
+            item["pending"] = False
+            _fail(item, "local_address_unavailable")
     except UsageError:
         item["pending"] = False
         _fail(item, "host_not_registered")

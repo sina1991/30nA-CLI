@@ -27,6 +27,15 @@ def address(value):
         raise UsageError("Invalid IP address") from exc
 
 
+def endpoint_label(host, number):
+    return f'[{host}]:{number}' if ":" in host else f"{host}:{number}"
+
+
+def describe_endpoints(row):
+    return ("local_id=1 local=" + endpoint_label(row["local"], row["local_port"]) +
+            " remote_id=" + str(row["remote_id"]) + " remote=" + endpoint_label(row["host"], row["remote_port"]))
+
+
 def run(argv):
     cli = parser(SWITCH, NAME + " manages OpenSSH forward and reverse tunnels.",
                  "Example: 30na -tunnel -forward -localhost -id 1 -local-port 8080 -remote-id 3 -remote-port 443")
@@ -40,7 +49,8 @@ def run(argv):
     endpoint.add_argument("-localhost", action="store_true", help="Local host ID 1 (loopback)")
     endpoint.add_argument("-domain", dest="ip", metavar="NAME", help=argparse.SUPPRESS)
     remote = cli.add_mutually_exclusive_group()
-    remote.add_argument("-remote-ip", "-remote-domain", "-remote-ip/domain", dest="remote", metavar="ADDRESS")
+    remote.add_argument("-remote-ip", "-remote-domain", dest="remote", metavar="ADDRESS")
+    remote.add_argument("-remote-ip/domain", dest="remote", metavar="ADDRESS", help=argparse.SUPPRESS)
     remote.add_argument("-remote-id", type=int, metavar="ID")
     cli.add_argument("-local-port", metavar="PORT")
     cli.add_argument("-remote-port", metavar="PORT")
@@ -116,9 +126,10 @@ def run(argv):
     result = request(agent, operation, parameters)["value"]
     if operation == "list":
         for row in result:
-            line = "{id} {mode} {host} {listen} {target}:{target_port} pid={pid} state={state}".format(**row)
             if row.get("remote_id") is not None:
-                line += " local_id=1 remote_id={remote_id} local={local}:{local_port} remote={host}:{remote_port}".format(**row)
+                line = "{id} {mode} ".format(**row) + describe_endpoints(row) + " pid={pid} state={state}".format(**row)
+            else:
+                line = "{id} {mode} {host} {listen} {target}:{target_port} pid={pid} state={state}".format(**row)
             if row.get("reason"):
                 line += " reason=" + row["reason"]
             if row.get("restore"):
@@ -128,6 +139,6 @@ def run(argv):
         print("id={id} pid={pid} state={state}".format(**result) +
               (" restore=on" if result.get("restore") else ""))
         if result.get("remote_id") is not None:
-            print("local_id=1 remote_id={remote_id} local={local}:{local_port} remote={host}:{remote_port}".format(**result))
+            print(describe_endpoints(result))
     else:
         print("stopped " + result["id"])

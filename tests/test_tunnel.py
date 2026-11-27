@@ -501,6 +501,20 @@ class TunnelTests(unittest.TestCase):
         self.assertIn(f"127.0.0.1:{listen}:127.0.0.1:443", args)
         self.cli("-tunnel", "-stop", "-id", token)
 
+    def test_modern_direct_alias_and_clean_listing(self):
+        listen = unused_port()
+        result = self.cli("-tunnel", "-forward", "-ip", "127.0.0.1", "-listen", str(listen),
+                          "-remote-ip/domain", self.host, "-remote-port", "443")
+        token = result.stdout.split()[0].split("=")[1]
+        self.wait_state(token, "ready")
+        line = self.cli("-tunnel", "-list").stdout
+        self.assertIn("local_id=1 local=127.0.0.1:" + str(listen), line)
+        self.assertIn("remote_id=2 remote=" + self.host + ":443", line)
+        self.assertNotIn("target=", line)
+        help_text = self.cli("-tunnel", "-help").stdout
+        self.assertNotIn("-target-port", help_text)
+        self.cli("-tunnel", "-stop", "-id", token)
+
 
 if __name__ == "__main__":
     unittest.main()

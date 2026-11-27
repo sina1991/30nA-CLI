@@ -1,6 +1,5 @@
 """Reusable terminal regions, contextual help and local picker suggestions."""
 from dataclasses import dataclass
-import ipaddress
 
 
 HELP = {
@@ -21,9 +20,6 @@ FIELD_HELP = {
     "local-port": "Local endpoint port; listener in Forward, service in Reverse.",
     "remote-port": "Remote endpoint port; service in Forward, listener in Reverse.",
     "listen": "f: common listen ports (not checked for availability).",
-    "target": "f: loopback, actual local interface IPs or custom IP. Forward target is remote; reverse target is local.",
-    "target-port": "f: common destination ports; Enter: type any valid port.",
-    "restore": "f: yes/no. Restores only ready opted-in sessions after worker crash.",
     "tunnel": "f: choose an existing tunnel ID.",
     "protocol": "f: select TCP or UDP.",
     "unit": "f: choose an installed or loaded .service unit.",
@@ -50,28 +46,15 @@ def layout(height, width):
     return Layout(2, 1, width-2, 0, height-6, False)
 
 
-def suggestions(kind, current="", local_ips=()):
+def suggestions(kind, current=""):
     if kind == "protocol":
         return [("tcp", "TCP"), ("udp", "UDP")]
-    if kind == "restore":
-        pairs = [("no", "No - default"), ("yes", "Yes - worker crash recovery")]
-    elif kind in ("listen", "target-port", "local-port", "remote-port"):
+    if kind in ("listen", "local-port", "remote-port"):
         ports = ("5555", "8080", "8443", "443", "80", "22", "3306", "5432")
         pairs = [(p, p + " (suggestion)") for p in ports]
-    elif kind == "target":
-        pairs = [("127.0.0.1", "127.0.0.1 (IPv4 loopback)"),
-                 ("::1", "::1 (IPv6 loopback)")]
-        for host in local_ips:
-            try:
-                ip = str(ipaddress.ip_address(host))
-            except ValueError:
-                continue
-            if ip not in {value for value, _ in pairs}:
-                pairs.append((ip, ip + " (local interface)"))
     else:
         pairs = []
     if current and current not in {value for value, _ in pairs}:
         pairs.insert(0, (current, current + " (current)"))
-    if kind != "restore":
-        pairs.append((None, "[Enter custom value]"))
+    pairs.append((None, "[Enter custom value]"))
     return pairs

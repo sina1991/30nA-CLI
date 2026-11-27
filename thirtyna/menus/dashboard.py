@@ -453,7 +453,10 @@ class Dashboard:
                 self.draw(region.top+i-first, region.left, ("> " if selected else "  ") + line,
                           self.active if selected else self.normal, fill=selected, limit=region.width)
         if self.confirming:
-            self.draw(h-4, 0, " CONFIRM: " + self.action.title + "? ", self.warning, True)
+            prompt = self.action.title
+            if self.action.args[:2] == ("-tunnel", "-forward") and self.values[0] != "1":
+                prompt = "Bind listener on " + self.values[0] + " (review exposure)"
+            self.draw(h-4, 0, " CONFIRM: " + prompt + "? ", self.warning, True)
         else:
             self.draw(h-4, 0, self.snapshot.summary(compact=w < 74),
                       self.warning if self.snapshot.tunnels and self.snapshot.tunnels["failed"]
@@ -535,7 +538,14 @@ class Dashboard:
                 if len(words) >= 5:
                     state = next((v[6:] for v in words if v.startswith("state=")), "?")
                     remote = next((v[10:] for v in words if v.startswith("remote_id=")), "?")
-                    rows.append(f"{'F' if words[1] == 'forward' else 'R'} {state.upper()} #{remote} :{words[3]}")
+                    local_ep = next((v[6:] for v in words if v.startswith("local=")), "")
+                    remote_ep = next((v[7:] for v in words if v.startswith("remote=")), "")
+                    direction = "F" if words[1] == "forward" else "R"
+                    if local_ep and remote_ep:
+                        ports = local_ep.rsplit(":", 1)[-1] + (">" if direction == "F" else "<") + remote_ep.rsplit(":", 1)[-1]
+                    else:
+                        ports = ":" + words[3]
+                    rows.append(f"{direction} {state.upper()} #{remote} {ports}")
         rows += ["30nA WORKERS"]
         rows += ([f"{name}: {snap.workers[name]}" for name in ("supervisor", "port", "host", "tunnel")]
                  if snap.workers else ["Unknown"])
@@ -630,13 +640,8 @@ class Dashboard:
             elif not self.choices:
                 self.choices.append((None, "[Enter tunnel ID manually]"))
         else:
-            local_ips = []
-            if kind == "target":
-                result = self.runner(["-sys", "-ip"])
-                self.snapshot.observe(["-sys", "-ip"], result)
-                local_ips = self.snapshot.local_ips or []
-            self.choices = suggestions(kind, self.values[self.index], local_ips)
-        self.choice_index = 0
+            self.choices = suggestions(kind, self.values[self.index])
+        self.choice_index = next((i for i, (value, _) in enumerate(self.choices) if value == self.values[self.index]), 0)
         self.page = "picker"
         self.status, self.detail = "OK", "Select a value or enter custom"
 
@@ -673,6 +678,25 @@ class Dashboard:
         else:
             result = self.runner(args)
         self.set_result(args, result)
+        if result.code == 0:
+            self.refresh_after_action(args)
+
+    def refresh_after_action(self, args):
+        """Refresh affected snapshots after successful explicit mutations."""
+        commands = []
+        if args[:2] in (["-tunnel", "-forward"], ["-tunnel", "-reverse"], ["-tunnel", "-stop"]):
+            commands = [["-host", "-list", "-ids"], ["-tunnel", "-list"],
+                        ["-service", "-workers"], ["-port", "-list"]]
+        elif args[:2] in (["-host", "-add"], ["-host", "-remove"]):
+            commands = [["-host", "-list", "-ids"], ["-service", "-workers"]]
+        elif args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-managed", "-status", "-logs", "-help"):
+            commands = [["-service", "-active"], ["-service", "-managed"], ["-port", "-list"]]
+        elif args[:2] == ["-port", "-force"]:
+            commands = [["-port", "-list"], ["-service", "-active"], ["-service", "-managed"], ["-service", "-workers"]]
+        if commands:
+            self.render()
+            for command in commands:
+                self.snapshot.observe(command, self.runner(command))
 
     def back(self):
         if self.page == "overview":

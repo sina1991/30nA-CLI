@@ -187,9 +187,8 @@ class DashboardTests(unittest.TestCase):
         self.keys(curses.KEY_DOWN, curses.KEY_DOWN, curses.KEY_RIGHT)
         self.assertTrue(self.ui.confirming)
         self.keys("y")
-        self.assertEqual(self.calls[-1][0], ["-tunnel", "-forward", "-localhost", "-id", "1",
-                                             "-local-port", "8080", "-remote-id", "3", "-remote-port", "443"])
-        self.assertIsNone(self.ui.snapshot.tunnels)
+        self.assertIn((["-tunnel", "-forward", "-localhost", "-id", "1", "-local-port", "8080", "-remote-id", "3", "-remote-port", "443"], False), self.calls)
+        self.assertEqual(self.ui.snapshot.tunnels["ready"], 1)
         self.keys(curses.KEY_LEFT, curses.KEY_LEFT, curses.KEY_LEFT)
         self.assertEqual(self.ui.page, "home")
 
@@ -199,7 +198,7 @@ class DashboardTests(unittest.TestCase):
         self.keys("n")
         self.assertEqual(self.calls, [(["-tunnel", "-list"], False)])
         self.keys("\n", "y")
-        self.assertEqual(self.calls[-1], (["-tunnel", "-stop", "-id", "def"], False))
+        self.assertIn((["-tunnel", "-stop", "-id", "def"], False), self.calls)
         self.assertEqual(self.ui.page, "result")
 
     def test_header_context_and_panels(self):
@@ -226,7 +225,7 @@ class DashboardTests(unittest.TestCase):
 
     def test_all_tunnel_fields_have_picker(self):
         self.keys("4", "j", "\n")
-        for index, expected in enumerate(("1", "5555", "2", "5555")):
+        for index, expected in enumerate(("1", "8080", "2", "443")):
             self.assertEqual(self.ui.index, index)
             self.keys("f")
             self.assertEqual(self.ui.page, "picker")
@@ -251,7 +250,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(self.ui.line_style("1 LOCAL testhost"), 10)
         self.assertEqual(self.ui.line_style("3 REMOTE ssh.example.test"), 11)
         self.assertEqual(self.ui.line_style("F READY #3 :8080"), 12)
-        self.assertEqual(self.ui.line_style("R STARTING #3 :443"), 13)
+        self.assertEqual(self.ui.line_style("R STARTING #3 8080<443"), 13)
         self.assertEqual(self.ui.line_style("abc forward ssh.example.test 80 127.0.0.1:443 state=failed"), 14)
 
     def test_service_picker_and_confirmation(self):
@@ -260,7 +259,7 @@ class DashboardTests(unittest.TestCase):
         self.keys("n")
         self.assertFalse(any(args[:2] == ["-service", "-start"] for args, _ in self.calls))
         self.keys("\n", "y")
-        self.assertEqual(self.calls[-1], (["-service", "-start", "-unit", "ssh.service"], False))
+        self.assertIn((["-service", "-start", "-unit", "ssh.service"], False), self.calls)
 
     def test_host_key_error_shows_safe_guidance(self):
         self.ui.set_result(["-tunnel", "-reverse"], Result(1, stderr="30na: SSH tunnel failed: host_key_failed"))
@@ -285,7 +284,7 @@ class DashboardTests(unittest.TestCase):
         self.keys("n")
         self.assertFalse(any(args[:2] == ["-port", "-force"] for args, _ in self.calls))
         self.keys("\n", "y")
-        self.assertEqual(self.calls[-1], (["-port", "-force", "5555", "-udp", "-pid", "12345"], False))
+        self.assertIn((["-port", "-force", "5555", "-udp", "-pid", "12345"], False), self.calls)
 
     def test_port_snapshot_unknown_on_failure(self):
         snap = Snapshot()
