@@ -54,4 +54,6 @@ Two-VPS reverse engine: `thirtyna/two_vps.py`, `thirtyna/reverse_peer.py`, `test
 
 Installer bootstrap (`install.sh --bootstrap`) uses clean official main checkout only, installs missing Ubuntu prerequisites, preserves existing active SSH/socket activation, validates local root key pair if present. `INSTALL_DEPS=0` must not run apt, systemctl or modify keys.
 
-VLESS Test Agent uses thirtyna/agents/test.py, thirtyna/vless_test.py and tests/test_vless_test.py. Preserve private input/configuration handling, owned-client cleanup, SOCKS-only curl requests and credential-free summary reports. Host probes are outside the first Test Agent scope.
+Proxy Profile Test Agent uses thirtyna/agents/test.py, thirtyna/vless_test.py and tests/test_vless_test.py. Share-link conversion also uses thirtyna/profile_links.py and tests/test_profile_links.py. Preserve private input/configuration handling, owned-client cleanup, SOCKS-only curl requests and credential-free summary reports. Host probes are outside the first Test Agent scope.
+
+Profile history uses thirtyna/test_history.py and tests/test_test_history.py. Keep stable hashed identities, transactional/idempotent observations, download-size cohorts, minimum-batch thresholds and atomic catalog exports.

@@ -58,3 +58,7 @@ Host addition now also installs the application and Ubuntu dependencies on the r
 Host addition optionally transfers ~/30na-SSH-Backup.zip to the authenticated peer, obtains its password through a native 7z TTY prompt, and validates/restores the shared SSH identity before registering the host. Existing differing key files receive private backups.
 
 Test Agent adds -test for isolated VLESS profile benchmarks with selection, route labels and per-attempt/aggregate reports. The existing local Xray installation and profiles file are reused.
+
+The Test Agent now accepts VLESS, VMess, Trojan and Shadowsocks share links with TCP/RAW, WebSocket and gRPC transports as supported by the selected protocol, and reports protocol/success ratio and download ranges. Native UDP protocols need separate path support.
+
+Test history stores credential-free observations in a private controller SQLite database and generates three rolling profile lists. Default sample thresholds and relative fleet comparisons are documented in TEST_AGENT_GUIDE.md.

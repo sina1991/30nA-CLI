@@ -109,11 +109,11 @@ clear
 
 [قرارداد جدید Local/Remote و شناسه Host](docs/layer1-tunnel.md)
 
-## VLESS Test Agent
+## Proxy Profile Test Agent
 
-[دستورات تست پروفایل‌های VLESS و گزارش‌ها](docs/TEST_AGENT_GUIDE.md)
+[تست پروفایل‌ها، تاریخچه و سه فهرست کیفیت](docs/TEST_AGENT_GUIDE.md)
 
 ```bash
 clear
-30na -test -vless -all
+30na -test -all
 ```
