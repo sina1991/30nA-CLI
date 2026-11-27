@@ -1,6 +1,6 @@
-# 30nA-CLI v1.0.0-rc.1
+# 30nA-CLI v1.0.0-rc.2
 
-First release candidate for Ubuntu terminal server management.
+Second release candidate for Ubuntu terminal server management. Host addition now installs the application and Ubuntu prerequisites on the target before registration, with a downgrade guard.
 
 - Host enrollment verifies management public-key access before registration and configures ordinary SSH login from the controller.
 - Forward and Reverse use registered hosts and operator-selected TCP ports.
