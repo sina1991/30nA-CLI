@@ -119,14 +119,14 @@ class DashboardTests(unittest.TestCase):
         actions = dict(CATALOG)
         self.assertEqual(len(actions["Calculator"]), 5)
         self.assertEqual(len(actions["System"]), 9)
-        self.assertEqual(len(actions["Host"]), 6)
+        self.assertEqual(len(actions["Host"]), 4)
         self.assertTrue(actions["Host"][1].confirm)
-        self.assertTrue(actions["Host"][2].interactive)
-        self.assertTrue(actions["Host"][2].confirm)
-        self.assertEqual(actions["Host"][2].command(["ssh.example.test"]),
+        self.assertTrue(actions["Host"][1].interactive)
+        self.assertTrue(actions["Host"][1].confirm)
+        self.assertEqual(actions["Host"][1].command(["ssh.example.test"]),
                          ["-host", "-add", "-domain", "ssh.example.test", "-onboard", "-password"])
-        self.assertEqual(len(actions["Tunnel"]), 9)
-        self.assertEqual(actions["Tunnel"][3].command([]), ["-tunnel", "-discover"])
+        self.assertEqual(len(actions["Tunnel"]), 7)
+        self.assertEqual(actions["Tunnel"][3].command(["abc"]), ["-tunnel", "-stop", "-id", "abc"])
         self.assertEqual(len(actions["Help"]), 8)
         self.assertEqual(len(actions["Ports"]), 8)
         self.assertEqual(len(actions["Services"]), 14)
@@ -135,10 +135,10 @@ class DashboardTests(unittest.TestCase):
                           "-mul", "8", "2", "-div", "8", "2"])
         self.assertEqual(actions["Tunnel"][1].command(["1", "8080", "3", "443"]),
                          ["-tunnel", "-forward", "-localhost", "-id", "1", "-local-port", "8080",
-                          "-remote-id", "3", "-remote-port", "443"])
-        self.assertEqual(actions["Tunnel"][2].command(["192.0.2.55", "8080", "ssh.example.test", "443"]),
+                          "-remote-id", "3", "-remote-port", "443", "-persistent"])
+        self.assertEqual(actions["Tunnel"][2].command(["192.0.2.55", "8080", "2", "443"]),
                          ["-tunnel", "-reverse", "-ip", "192.0.2.55", "-local-port", "8080",
-                          "-remote-ip", "ssh.example.test", "-remote-port", "443"])
+                          "-remote-id", "2", "-remote-port", "443"])
         with self.assertRaises(ValueError):
             actions["Tunnel"][2].command(["1", "8080", "", "443"])
 
@@ -193,13 +193,13 @@ class DashboardTests(unittest.TestCase):
         self.keys(curses.KEY_DOWN, curses.KEY_DOWN, curses.KEY_RIGHT)
         self.assertTrue(self.ui.confirming)
         self.keys("y")
-        self.assertIn((["-tunnel", "-forward", "-localhost", "-id", "1", "-local-port", "8080", "-remote-id", "3", "-remote-port", "443"], False), self.calls)
+        self.assertIn((["-tunnel", "-forward", "-localhost", "-id", "1", "-local-port", "8080", "-remote-id", "3", "-remote-port", "443", "-persistent"], False), self.calls)
         self.assertEqual(self.ui.snapshot.tunnels["ready"], 1)
         self.keys(curses.KEY_LEFT, curses.KEY_LEFT, curses.KEY_LEFT)
         self.assertEqual(self.ui.page, "home")
 
     def test_stop_requires_confirmation_and_picker(self):
-        self.keys("4", "j", "j", "j", "j", "\n", "f", "j", "\n", "j", "\n")
+        self.keys("4", "j", "j", "j", "\n", "f", "j", "\n", "j", "\n")
         self.assertTrue(self.ui.confirming)
         self.keys("n")
         self.assertEqual(self.calls, [(["-tunnel", "-list"], False)])
@@ -328,7 +328,8 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(invoke(["-sys", "-hostname"]).code, 0)
         with tempfile.TemporaryDirectory() as tmp, patch.dict(os.environ, {"XDG_DATA_HOME": tmp}):
             try:
-                self.assertEqual(invoke(["-host", "-add", "-domain", "ssh.example.test"]).code, 0)
+                from thirtyna.runtime.service import control, request
+                request(control("ensure", bootstrap=True), "register", "ssh.example.test")
                 self.assertEqual(invoke(["-host", "-list"]).stdout.strip(), "ssh.example.test")
                 self.assertEqual(invoke(["-tunnel", "-list"]).code, 0)
             finally:

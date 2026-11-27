@@ -115,7 +115,16 @@ class EnrollmentTests(unittest.TestCase):
     @patch("thirtyna.agents.host.control")
     def test_invalid_options_do_not_connect(self, control):
         for args in (["-list", "-onboard"], ["-add", "-ip", "192.0.2.1", "-onboard", "-ssh"],
-                     ["-add", "-ip", "192.0.2.1", "-password"]):
+                     ["-list", "-password"]):
             with self.assertRaises(UsageError):
                 host.run(args)
         control.assert_not_called()
+
+class RequiredEnrollmentTests(unittest.TestCase):
+    @patch("thirtyna.agents.host.request")
+    @patch("thirtyna.agents.host.control", return_value={"endpoint_protocol": 1, "domain_support": True})
+    @patch("thirtyna.onboarding.enroll", side_effect=RuntimeError("SSH key login failed"))
+    def test_plain_add_requires_authentication(self, enroll, control, request):
+        with self.assertRaisesRegex(RuntimeError, "SSH key login failed"):
+            host.run(["-add", "-ip", "192.0.2.1"])
+        request.assert_not_called()

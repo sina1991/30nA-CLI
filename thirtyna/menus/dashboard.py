@@ -50,8 +50,9 @@ class Action:
                 value = values[2]
                 if not value.strip():
                     raise ValueError("Select a remote host")
-                args.extend(("-remote-id", value) if value.isascii() and value.isdecimal()
-                            else ("-remote-ip", value))
+                if not value.isascii() or not value.isdecimal() or int(value) < 2:
+                    raise ValueError("Select a registered remote host ID")
+                args.extend(("-remote-id", value))
             elif part == "@protocol":
                 value = values[1].lower()
                 if value not in ("tcp", "udp"):
@@ -63,14 +64,14 @@ class Action:
 
 
 def tunnel(mode, persistent=False):
-    title = "Persistent Forward" if persistent else mode.capitalize() + " tunnel"
+    title = mode.capitalize() + " tunnel"
     extra = ("-persistent",) if persistent else ()
     return Action(title,
                   ("-tunnel", "-" + mode, "@local", "-local-port", 1,
                    "@remote", "-remote-port", 3, *extra),
                   (Field("Local host (ID 1)", "1", "local"),
                    Field("Local port", "8080", "local-port"),
-                   Field("Registered remote ID" if persistent else "Remote host ID/IP/domain", "", "remote"),
+                   Field("Registered remote ID", "", "remote"),
                    Field("Remote port", "443", "remote-port")),
                   confirm=True,
                   hint=("Local listener -> remote loopback service." if mode == "forward"
@@ -91,30 +92,22 @@ CATALOG = (
      + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM) + (Action("Local interface IPs", ("-sys", "-ip")),)),
     ("Host", (
         Action("List numbered hosts", ("-host", "-list", "-ids")),
-        Action("Add / update host (SSH onboarding)", ("-host", "-add", "-domain", 0, "-onboard"),
-               (Field("IP or domain"),), confirm=True,
-               hint="Use local management key; verify the host fingerprint and key-only SSH login."),
-        Action("Add / update host (password / key + password)", ("-host", "-add", "-domain", 0, "-onboard", "-password"),
+        Action("Add host", ("-host", "-add", "-domain", 0, "-onboard", "-password"),
                (Field("IP or domain"),), interactive=True, confirm=True,
-               hint="Native password prompt and ssh-copy-id; verify host fingerprint."),
+               hint="Verify SSH access and register the management public key."),
         Action("Connect SSH", ("-host", "-ssh", "-domain", 0),
                (Field("Registered IP or domain", picker="host"),), interactive=True,
                hint="Uses your SSH configuration. Exit SSH to return."),
-        Action("Register address only (offline)", ("-host", "-add", "-domain", 0),
-               (Field("IP or domain"),)),
         Action("Remove host", ("-host", "-remove", "-domain", 0),
                (Field("IP or domain", picker="host"),), confirm=True),
     )),
     ("Tunnel", (
         Action("List tunnels", ("-tunnel", "-list")),
-        tunnel("forward"), tunnel("reverse"),
-        Action("Discover external SSH tunnel services", ("-tunnel", "-discover"),
-               hint="Read-only inventory across registered hosts; no adoption or stop."),
+        tunnel("forward", persistent=True), tunnel("reverse"),
         *(Action(title, ("-tunnel", flag, "-id", 0),
                  (Field("Tunnel ID", picker="tunnel"),), confirm=True)
           for title, flag in (("Stop tunnel", "-stop"), ("Start managed tunnel", "-start"),
                               ("Restart managed tunnel", "-restart"), ("Delete managed tunnel", "-delete"))),
-        tunnel("forward", persistent=True),
     )),
     ("Files", (
         Action("Open current directory", ("@files",)),

@@ -131,11 +131,14 @@ def run(argv):
         if host_agent.get("endpoint_protocol") != 1:
             raise RuntimeError("Restart Service Agent before using numbered hosts")
         if remote_host is not None:
-            # An explicitly supplied remote address is an explicit registration.
-            remote_id = request(host_agent, "register", remote_host)["value"]
+            request(host_agent, "exists", remote_host)
+            entries = request(host_agent, "ids", None)["value"]
+            remote_id = next(row["id"] for row in entries if row["ip"] == remote_host)
         else:
             remote_id = args.remote_id
             remote_host = request(host_agent, "lookup", remote_id)["value"]
+        from thirtyna.onboarding import enroll
+        enroll(remote_host, interactive=False)
         parameters.update(host=remote_host, remote_id=remote_id)
         if direction == "reverse":
             result = two_vps.start(parameters)
