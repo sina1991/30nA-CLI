@@ -118,7 +118,7 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(len(actions["Host"]), 5)
         self.assertEqual(len(actions["Tunnel"]), 4)
         self.assertEqual(len(actions["Help"]), 8)
-        self.assertEqual(len(actions["Ports"]), 6)
+        self.assertEqual(len(actions["Ports"]), 8)
         self.assertEqual(len(actions["Services"]), 13)
         self.assertEqual(actions["Calculator"][4].command(["8", "2"]),
                          ["-calc", "-add", "8", "2", "-sub", "8", "2",
@@ -256,8 +256,19 @@ class DashboardTests(unittest.TestCase):
         self.ui.render()
         self.assertIn("Ports T/U 1/1", self.screen.lines[20])
         self.assertIn("tcp 22 ssh.service", self.ui.side_lines())
-        self.keys("8", "k", "\n", "f", "\n", "j", "\n")
+        self.keys("8", "k", "k", "k", "\n", "f", "\n", "j", "\n")
         self.assertEqual(self.calls[-1], (["-port", "-check", "5555"], False))
+
+    def test_emergency_port_action_requires_confirmation(self):
+        self.keys("8", "k", "\n")
+        self.keys("j", "f", "j", "\n", "j")
+        self.field("12345")
+        self.keys("\n")
+        self.assertTrue(self.ui.confirming)
+        self.keys("n")
+        self.assertFalse(any(args[:2] == ["-port", "-force"] for args, _ in self.calls))
+        self.keys("\n", "y")
+        self.assertEqual(self.calls[-1], (["-port", "-force", "5555", "-udp", "-pid", "12345"], False))
 
     def test_port_snapshot_unknown_on_failure(self):
         snap = Snapshot()

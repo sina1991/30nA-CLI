@@ -10,7 +10,7 @@ HELP = {
     "Tunnel": "Forward/reverse SSH. Register host first. f opens choices on every field.",
     "Files": "Browse, copy, move and edit files in the two-pane manager.",
     "Help": "Open exact CLI help for any public agent.",
-    "Ports": "Inspect local TCP/UDP ports, sockets, process owners and observed systemd units. No process termination.",
+    "Ports": "Inspect local TCP/UDP ports, sockets, process owners and observed systemd units. Emergency release requires exact owner and confirmation.",
     "Services": "Systemd: list units, status, logs, start/stop/restart, enable/disable. Changes require confirmation.",
 }
 
@@ -21,6 +21,7 @@ FIELD_HELP = {
     "target-port": "f: common destination ports; Enter: type any valid port.",
     "restore": "f: yes/no. Restores only ready opted-in sessions after worker crash.",
     "tunnel": "f: choose an existing tunnel ID.",
+    "protocol": "f: select TCP or UDP.",
     "unit": "f: choose an installed or loaded .service unit.",
 }
 
@@ -46,6 +47,8 @@ def layout(height, width):
 
 
 def suggestions(kind, current="", local_ips=()):
+    if kind == "protocol":
+        return [("tcp", "TCP"), ("udp", "UDP")]
     if kind == "restore":
         pairs = [("no", "No - default"), ("yes", "Yes - worker crash recovery")]
     elif kind in ("listen", "target-port"):

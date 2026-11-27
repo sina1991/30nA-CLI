@@ -63,3 +63,5 @@ System Agent با گزینه -ip آدرس‌های Interface محلی را از 
 ## Ports
 
 منوی 8 (Ports) فهرست TCP/UDP، همه Socketها، بررسی یک شماره و تعداد پورت‌ها را نمایش می‌دهد. Status Bar دارای Ports T/U (TCP/UDP) است و پنل وضعیت شماره و Unit مشاهده‌شده را نشان می‌دهد. [راهنمای Port Agent](PORT_AGENT_GUIDE.md).
+
+منوی Ports دارای Emergency release by unit/PID است. ابتدا Inspect port number را اجرا کنید، سپس پروتکل و مالک دقیق را تعیین کنید. تأیید y برای عملیات توقف لازم است. خروجی BEFORE/AFTER و محدودیت‌ها در [Port Agent Guide](PORT_AGENT_GUIDE.md) آمده‌اند.

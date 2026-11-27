@@ -41,6 +41,11 @@ class Action:
                 if not value.strip():
                     raise ValueError(self.fields[part].name + " is required")
                 args.append(value)
+            elif part == "@protocol":
+                value = values[1].lower()
+                if value not in ("tcp", "udp"):
+                    raise ValueError("Protocol must be tcp or udp")
+                args.append("-" + value)
             elif part == "@restore":
                 value = values[-1].lower()
                 if value not in ("yes", "no"):
@@ -117,6 +122,12 @@ CATALOG = (
         Action("Port counts", ("-port", "-summary")),
         Action("Inspect port number", ("-port", "-check", 0),
                (Field("Port number", "5555", "listen"),)),
+        Action("Emergency release by unit", ("-port", "-force", 0, "@protocol", "-unit", 2),
+               (Field("Port number", "5555", "listen"), Field("Protocol", "tcp", "protocol"), Field("Exact owning unit", picker="unit")),
+               confirm=True, hint="Inspect port first. Stops entire selected service."),
+        Action("Emergency release by PID", ("-port", "-force", 0, "@protocol", "-pid", 2),
+               (Field("Port number", "5555", "listen"), Field("Protocol", "tcp", "protocol"), Field("Exact standalone PID")),
+               confirm=True, hint="Inspect port first. Terminates the selected process."),
     )),
 )
 
@@ -132,6 +143,8 @@ class Result:
 def invoke(args, interactive=False, timeout=15):
     """No shell. Pin Python and launcher to the current installed release."""
     argv = [sys.executable, str(LAUNCHER), *args]
+    if args[:2] == ["-port", "-force"]:
+        timeout = max(timeout, 60)
     try:
         if interactive:
             return Result(subprocess.run(argv).returncode,
@@ -168,6 +181,10 @@ class Snapshot:
         self.overview_time = None
 
     def invalidate(self, args):
+        if args and args[0] == "-port" and "-force" in args:
+            self.ports = self.port_rows = self.services = self.workers = None
+            self.tunnels = self.tunnel_time = None
+            self.tunnel_rows = []
         if args and (args[0] == "-tunnel" and "-list" not in args or
                      args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-status", "-logs", "-help")):
             self.ports = self.port_rows = None

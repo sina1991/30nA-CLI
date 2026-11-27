@@ -22,7 +22,7 @@ Read this file first. Do not reload old chat transcripts or the entire repositor
 ## Invariants
 - Public agents expose SWITCH, NAME, run(argv); discovery belongs to core.
 - Host Agent alone accesses its SQLite storage. Shared endpoint validation is in thirtyna/address.py; DNS registration never implicitly authorizes resolved IPs. Tunnel authorization goes through authenticated Host IPC.
-- Service Agent supervises separate workers; shared Port Agent allocates worker control sockets. OpenSSH owns forwarding sockets; never kill a foreign listener.
+- Service Agent supervises separate workers; shared Port Agent allocates worker control sockets. OpenSSH owns forwarding sockets; runtime allocator and Tunnel never kill a foreign listener. Explicit public Port Agent emergency release follows its separate owner-verification policy.
 - Forward/reverse listeners request loopback binding. No readiness claim based only on a live PID. No credentials or private keys in source, logs or commits.
 - Preserve Linux isolation, XDG paths, error exit codes, noninteractive SSH and cleanup. Recovery is opt-in, RAM-only, bounded and reauthorizes Host. Explicit stop discards intent. Never infer readiness from process liveness or bypass Host IPC. Do not introduce unrelated dependencies or change unrelated agents.
 
@@ -42,4 +42,4 @@ For systemd operations use `thirtyna/agents/systemctl.py`, `docs/SYSTEMD_SERVICE
 
 Local IP discovery: `thirtyna/agents/sysinfo.py` (`-sys -ip`) uses local interface information, not Host registration or external DNS. Target pickers must not require saved hosts to show local addresses.
 
-Public Port Inspection Agent: `thirtyna/agents/port.py`, `tests/test_port.py`, `docs/PORT_AGENT_GUIDE.md`. Distinct from runtime allocator; inspect only, never kill a foreign listener. Owner/unit unknown when unavailable.
+Public Port Inspection Agent: `thirtyna/agents/port.py`, `tests/test_port.py`, `docs/PORT_AGENT_GUIDE.md`. Distinct from runtime allocator; read-only by default. Explicit -force is the only public emergency release exception; verify exact owner, protect SSH/runtime/ancestors, never indiscriminately kill listeners. Owner/unit unknown when unavailable.

@@ -111,10 +111,18 @@ def guard_pid(pid):
         command = Path(f"/proc/{pid}/cmdline").read_bytes()
     except OSError as exc:
         raise RuntimeError("Owner identity unavailable; refusing release") from exc
-    if (name in {"sshd", "ssh", "systemd", "systemd-logind", "dbus-daemon", "dbus-broker"}
+    if (name.startswith(("sshd", "systemd", "dbus-")) or name == "ssh"
             or b"thirtyna.runtime" in command or b"/30na\x00" in command
             or b"30na\x00" in command):
         raise UsageError("Protected SSH/system/30nA process; use its own management interface")
+
+
+def identity(pid):
+    try:
+        # Field 22 (starttime); comm can contain spaces and closing parentheses.
+        return Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[19]
+    except (OSError, IndexError) as exc:
+        raise RuntimeError("Cannot verify process identity") from exc
 
 
 def unit_group(unit):
@@ -170,13 +178,19 @@ def release(port, protocol, unit=None, pid=None):
             group = unit_group(unit)
         except (OSError, subprocess.SubprocessError) as exc:
             raise RuntimeError("Cannot verify service ownership") from exc
+        if any(in_group(ancestor, group) for ancestor in ancestors()):
+            raise UsageError("Selected unit contains this command or an ancestor")
         verify_owner(rows, group=group)
         current = matching(port, protocol)
         if current != rows or not current:
             raise RuntimeError("Socket ownership changed; inspect again")
         verify_owner(current, group=group)
         print("ACTION stop unit=" + unit + " (may affect other ports)", flush=True)
-        code = service_run(["-stop", "-unit", unit])
+        try:
+            code = service_run(["-stop", "-unit", unit])
+        except (RuntimeError, OSError):
+            describe(matching(port, protocol), "AFTER")
+            raise
         if code:
             describe(matching(port, protocol), "AFTER")
             raise RuntimeError("Service stop failed; check unit status")
@@ -185,12 +199,17 @@ def release(port, protocol, unit=None, pid=None):
             raise RuntimeError("PID-safe release requires Linux pidfd support")
         # Open a stable process reference before the final ownership observation.
         verify_owner(rows, pid=pid)
+        started = identity(pid)
         with_pid = os.pidfd_open(pid)
         try:
+            if identity(pid) != started:
+                raise RuntimeError("Process identity changed")
             current = matching(port, protocol)
             if current != rows or not current:
                 raise RuntimeError("Socket ownership changed; inspect again")
             verify_owner(current, pid=pid)
+            if identity(pid) != started:
+                raise RuntimeError("Process identity changed")
             print(f"ACTION SIGTERM pid={pid}", flush=True)
             signal.pidfd_send_signal(with_pid, signal.SIGTERM)
             deadline = time.monotonic() + 1.0
@@ -205,6 +224,8 @@ def release(port, protocol, unit=None, pid=None):
                 current = matching(port, protocol)
                 if current:
                     verify_owner(current, pid=pid)
+                    if identity(pid) != started:
+                        raise RuntimeError("Process identity changed")
                     print(f"ACTION SIGKILL pid={pid}", flush=True)
                     signal.pidfd_send_signal(with_pid, signal.SIGKILL)
         finally:
@@ -224,7 +245,7 @@ def release(port, protocol, unit=None, pid=None):
 
 
 def run(argv):
-    cli = parser(SWITCH, "Inspect local TCP/UDP ports and observed owners.",
+    cli = parser(SWITCH, "Inspect local ports; explicitly release an emergency owner.",
                  "Examples: 30na -port -list | 30na -port -check 5555")
     mode = cli.add_mutually_exclusive_group(required=True)
     for op in ("list", "all", "summary"):
