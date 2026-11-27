@@ -6,6 +6,8 @@ import re
 import subprocess
 import sys
 
+from thirtyna.ssh_identity import import_identity, identity_options
+
 REVISION = re.compile(r"[0-9a-f]{40}\Z")
 
 # Fixed remote program. Values substituted below are validated hex strings.
@@ -137,33 +139,70 @@ def controller_revision():
     return value
 
 
+def ssh_options(key, interactive=False):
+    return [*identity_options(key), "-o", "BatchMode=" + ("no" if interactive else "yes"),
+            "-o", "PreferredAuthentications=" + ("publickey,password,keyboard-interactive" if interactive else "publickey"),
+            "-o", "StrictHostKeyChecking=" + ("ask" if interactive else "yes"),
+            "-o", "NumberOfPasswordPrompts=3", "-o", "ConnectTimeout=8",
+            "-o", "ClearAllForwardings=yes", "-o", "ControlMaster=no",
+            "-o", "ControlPath=none", "-o", "PermitLocalCommand=no"]
+
+
+def distinct_probe(address, key, controller, interactive=False):
+    result = subprocess.run(["ssh", "-T", *ssh_options(key, interactive),
+                             "--", address, "cat /etc/machine-id"],
+                            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                            stderr=None if interactive else subprocess.PIPE, timeout=90 if interactive else 15)
+    if result.returncode:
+        return False
+    machine = result.stdout.strip()
+    if not re.fullmatch(rb"[0-9a-f]{32}", machine):
+        raise RuntimeError("Remote machine identity unavailable")
+    if hashlib.sha256(machine).hexdigest() == controller:
+        raise RuntimeError("Endpoint is the local machine, reserved ID 1")
+    return True
+
+
+def authenticate(address, key, controller, interactive):
+    if distinct_probe(address, key, controller):
+        return
+    if not interactive:
+        raise RuntimeError("SSH key login failed; verify host key or use interactive -password enrollment")
+    print("Verify any new SSH host fingerprint independently before accepting.", file=sys.stderr, flush=True)
+    if not distinct_probe(address, key, controller, interactive=True):
+        raise RuntimeError("Interactive SSH authentication failed")
+    # Probe already verified host identity. Copy only the selected public key.
+    print("Registering the management public key with ssh-copy-id.", file=sys.stderr, flush=True)
+    options = ssh_options(key, True)
+    options[options.index("StrictHostKeyChecking=ask")] = "StrictHostKeyChecking=yes"
+    # ssh-copy-id accepts -i and -o, not ssh's standalone -T.
+    # The public file supplied to -i also selects its matching local private key.
+    options = options[2:]
+    result = subprocess.run(["ssh-copy-id", "-i", str(key.with_suffix(".pub")),
+                             *options, address], timeout=120)
+    if result.returncode:
+        raise RuntimeError("ssh-copy-id failed; check remote authorized_keys")
+    if not distinct_probe(address, key, controller):
+        raise RuntimeError("Public key was offered but noninteractive login is not verified; check server policy")
+
+
 def enroll(address, interactive=False):
-    """SSH config provides credentials; never install using an unverified host key."""
+    """Use a private local copy of the existing admin key; password is native SSH input."""
     if interactive and not sys.stdin.isatty():
         raise RuntimeError("Password authentication requires an interactive terminal")
     revision = controller_revision()
     machine = Path("/etc/machine-id").read_bytes().strip()
-    if not machine:
+    if not re.fullmatch(rb"[0-9a-f]{32}", machine):
         raise RuntimeError("Local machine identity unavailable")
-    script = REMOTE.replace("__REVISION__", revision).replace(
-        "__CONTROLLER__", hashlib.sha256(machine).hexdigest())
-    authentication = "publickey,password,keyboard-interactive" if interactive else "publickey"
-    argv = ["ssh", "-T", "-o", "BatchMode=" + ("no" if interactive else "yes"),
-            "-o", "PreferredAuthentications=" + authentication,
-            "-o", "StrictHostKeyChecking=" + ("ask" if interactive else "yes"),
-            "-o", "ForwardAgent=no", "-o", "NumberOfPasswordPrompts=3",
-            "-o", "ConnectTimeout=8", "-o", "ClearAllForwardings=yes",
-            "-o", "ControlMaster=no", "-o", "ControlPath=none",
-            "-o", "PermitLocalCommand=no", "--", address, "python3", "-"]
+    controller = hashlib.sha256(machine).hexdigest()
+    key = import_identity()
+    script = REMOTE.replace("__REVISION__", revision).replace("__CONTROLLER__", controller)
     try:
-        if interactive:
-            print("Verify any new host fingerprint against a trusted source before accepting.", file=sys.stderr, flush=True)
-        result = subprocess.run(argv, input=script, text=True, stdout=subprocess.PIPE,
-                                stderr=None if interactive else subprocess.PIPE,
-                                timeout=240 if interactive else 150)
+        authenticate(address, key, controller, interactive)
+        argv = ["ssh", "-T", *ssh_options(key), "--", address, "python3", "-"]
+        result = subprocess.run(argv, input=script, text=True, capture_output=True, timeout=150)
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("Enrollment timed out; inspect remote installation before retrying") from exc
-    # A failed SSH command can return arbitrary remote text. Do not relay stderr.
+        raise RuntimeError("Enrollment timed out; inspect remote state before retrying") from exc
     output = result.stdout
     if output:
         print(output[:60000], end="" if output.endswith("\n") else "\n", flush=True)

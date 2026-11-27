@@ -59,6 +59,10 @@ def run(argv):
             print(ip)
     if args.ssh:
         options = [] if sys.stdin.isatty() else ["-o", "BatchMode=yes"]
+        from thirtyna.ssh_identity import existing_identity, identity_options
+        key = existing_identity()
+        if key is not None:
+            options += identity_options(key)
         status = subprocess.run(["ssh", *options, "--", address]).returncode
         if status:
             raise RuntimeError(f"SSH exited with status {status}")
