@@ -42,7 +42,7 @@ clear
 30na -tunnel -reverse -localhost -remote-id 2 -local-port 18081 -remote-port 9000
 ```
 
-در Reverse اگر Local چند IPv4 دارد، IPv4 قابل دسترس از Remote را با `-ip` مشخص کنید. Forward با `-persistent` و Reverse شماره‌دار برای شروع خودکار در Boot واحد systemd دارند. Forward معمولی همچنان برای اتصال موقت در دسترس است.
+در Reverse با Listener روی Loopback، اگر یک IPv4 عمومی در کنار آدرس‌های خصوصی Docker وجود داشته باشد، همان IPv4 عمومی برای اتصال SSH انتخاب می‌شود. Listener همچنان روی Loopback می‌ماند. اگر آدرس مناسب یکتا نباشد، برنامه خطای انتخاب آدرس می‌دهد. Forward با `-persistent` و Reverse شماره‌دار برای شروع خودکار در Boot واحد systemd دارند. Forward معمولی همچنان برای اتصال موقت در دسترس است.
 
 <a id="manage"></a>
 ## ۳. مدیریت Tunnel

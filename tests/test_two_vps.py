@@ -50,6 +50,19 @@ class ReverseTests(unittest.TestCase):
         with self.assertRaises(UsageError):
             engine.gateway_address("127.0.0.1")
 
+    @patch("thirtyna.two_vps.local_addresses", return_value=[
+        "140.233.177.220", "172.17.0.1", "172.18.0.1", "172.19.0.1",
+        "172.20.0.1", "2001:41d0:f00:bf00:4ae0:bb7f:6545:aa0f"
+    ])
+    def test_loopback_reverse_selects_public_gateway_among_docker_addresses(self, addresses):
+        gateway = engine.gateway_address("127.0.0.1")
+        self.assertEqual(gateway, "140.233.177.220")
+        row = dict(self.row(), local="127.0.0.1", gateway=gateway)
+        definition = engine.service_definition(row)
+        self.assertIn("-R 127.0.0.1:5555:127.0.0.1:443", definition)
+        self.assertIn("@" + gateway, definition)
+        self.assertIn("PermitListen 127.0.0.1:5555", engine.policy(row))
+
     def test_foreign_listener_preserved(self):
         with socket.socket() as sock:
             sock.bind(("127.0.0.1", 0))

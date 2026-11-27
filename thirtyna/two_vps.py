@@ -141,7 +141,11 @@ def gateway_address(bind):
         if bind not in local_addresses():
             raise UsageError("Local bind address is not assigned")
         return bind
-    options = [x for x in local_addresses() if ipaddress.ip_address(x).version == 4]
+    options = list(dict.fromkeys(x for x in local_addresses()
+                                 if ipaddress.ip_address(x).version == 4))
+    public = [x for x in options if ipaddress.ip_address(x).is_global]
+    if len(public) == 1:
+        return public[0]
     if len(options) != 1:
         raise UsageError("Select the explicit reachable local IPv4 with -ip")
     return options[0]
