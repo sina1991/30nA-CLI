@@ -18,6 +18,7 @@ class CLITests(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         self.dir = Path(tmp.name)
         self.env = dict(os.environ, XDG_DATA_HOME=tmp.name)
+        self.addCleanup(subprocess.run, [sys.executable, "-m", "thirtyna.runtime.service", "shutdown"], cwd=ROOT, env=self.env, stdout=subprocess.DEVNULL)
 
     def invoke(self, *args, data="", code=0):
         result = subprocess.run([CLI, *args], input=data, capture_output=True,
