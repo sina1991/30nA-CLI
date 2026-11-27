@@ -150,9 +150,14 @@ def worker(listener, lifetime):
     last = None
     try:
         while True:
-            ready, _, _ = select.select([lifetime, listener], [], [])
+            timeout = 0.1 if name == "tunnel" and tunnel.needs_tick() else None
+            ready, _, _ = select.select([lifetime, listener], [], [], timeout)
             if lifetime in ready:
                 return
+            if name == "tunnel":
+                tunnel.tick()
+            if listener not in ready:
+                continue
             conn, _ = listener.accept()
             with conn, conn.makefile("rwb", buffering=0) as stream:
                 conn.settimeout(1)

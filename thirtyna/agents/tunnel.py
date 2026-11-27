@@ -61,7 +61,10 @@ def run(argv):
     result = request(agent, operation, parameters)["value"]
     if operation == "list":
         for row in result:
-            print("{id} {mode} {host} {listen} {target}:{target_port} pid={pid}".format(**row))
+            line = "{id} {mode} {host} {listen} {target}:{target_port} pid={pid} state={state}".format(**row)
+            if row.get("reason"):
+                line += " reason=" + row["reason"]
+            print(line)
     elif operation == "start":
         print("id={id} pid={pid} state={state}".format(**result))
     else:

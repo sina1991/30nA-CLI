@@ -14,7 +14,7 @@ Read this file first. Do not reload old chat transcripts or the entire repositor
 | CLI discovery / extension | thirtyna/core.py, docs/AGENT_DEVELOPMENT_GUIDE.md |
 | Host storage / SSH | thirtyna/agents/host.py, thirtyna/runtime/host.py, docs/layer1-host.md |
 | IPC / worker lifecycle | thirtyna/runtime/service.py, thirtyna/runtime/ports.py, tests/test_layer1.py |
-| Forward / reverse tunnels | thirtyna/agents/tunnel.py, thirtyna/runtime/tunnel.py, docs/layer1-tunnel.md, tests/test_tunnel.py |
+| Forward / reverse tunnels | thirtyna/agents/tunnel.py, thirtyna/runtime/tunnel.py, docs/layer1-tunnel.md, tests/test_tunnel.py, tests/test_tunnel_real.py |
 | Menu / file management | thirtyna/agents/menu.py, thirtyna/menus/, tests/test_menu.py, tests/test_file_manager.py |
 | Install / documentation | install.sh, docs/INSTALLATION_GUIDE.md, docs/CLI_USER_GUIDE.md |
 | Validation | docs/TESTING_GUIDE.md, .github/workflows/ci.yml |
