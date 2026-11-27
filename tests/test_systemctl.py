@@ -7,8 +7,9 @@ from thirtyna.core import UsageError
 
 
 class SystemctlTests(unittest.TestCase):
+    @patch("thirtyna.agents.systemctl.managed_units")
     @patch("thirtyna.agents.systemctl.subprocess.run")
-    def test_unit_commands_no_shell_or_escalation(self, run):
+    def test_unit_commands_no_shell_or_escalation(self, run, managed):
         run.return_value = subprocess.CompletedProcess([], 0)
         for op in systemctl.OPERATIONS:
             self.assertEqual(systemctl.run(["-" + op, "-unit", "ssh.service"]), 0)
