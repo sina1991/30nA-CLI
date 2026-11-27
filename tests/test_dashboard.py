@@ -65,6 +65,36 @@ class DashboardTests(unittest.TestCase):
     def field(self, value):
         self.keys("\n", "\x15", *value, "\n", "\t")
 
+    def test_status_styles_follow_command_state(self):
+        class Colors:
+            COLOR_PAIRS = 8
+            COLOR_BLACK = 0
+            COLOR_YELLOW = 3
+            COLOR_GREEN = 2
+            COLOR_WHITE = 7
+            COLOR_RED = 1
+            A_BOLD = 256
+            error = curses.error
+
+            def __init__(self):
+                self.pairs = {}
+
+            def has_colors(self):
+                return True
+
+            def init_pair(self, number, fg, bg):
+                self.pairs[number] = (fg, bg)
+
+            def color_pair(self, number):
+                return number
+
+        colors = Colors()
+        self.ui.c = colors
+        self.ui.init_status_colors()
+        self.assertEqual(colors.pairs, {5: (0, 3), 6: (0, 2), 7: (7, 1)})
+        self.assertEqual(self.ui.status_styles["OK"], 6 | 256)
+        self.assertEqual(self.ui.status_styles["ERROR"], 7 | 256)
+
     def test_catalog_covers_public_operations(self):
         self.assertEqual([name for name, _ in CATALOG],
                          ["Calculator", "System", "Host", "Tunnel", "Files", "Help"])

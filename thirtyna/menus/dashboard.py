@@ -177,6 +177,8 @@ class Dashboard:
     def __init__(self, screen, c, styles, start, runner=invoke):
         self.screen, self.c = screen, c
         self.accent, self.active, self.normal, self.warning = styles
+        self.status_styles = {"READY": self.active, "RUNNING": self.warning,
+                              "OK": self.active, "ERROR": self.warning}
         self.start, self.runner = start, runner
         self.snapshot = Snapshot()
         self.category = 0
@@ -287,7 +289,7 @@ class Dashboard:
                       self.warning if self.snapshot.tunnels and self.snapshot.tunnels["failed"]
                       else self.accent, True)
         self.draw(h-3, 0, " STATUS | " + self.status + " | " + self.detail,
-                  self.warning if self.status.startswith("ERROR") else self.active, True)
+                  self.status_styles.get(self.status.split()[0], self.active), True)
         keys = self.keys()
         legend = " Snapshot: R ready / S starting / F failed; ? unknown"
         if w < 55:
@@ -303,7 +305,7 @@ class Dashboard:
                 keys = "j/k Enter f:pick Esc"
             else:
                 keys = "j/k Enter r:refresh q"
-            legend = "R/S/F snapshot (? unknown)"
+            legend = "H:hosts R/S/F snapshot"
         self.draw(h-2, 0, keys, self.accent, True)
         self.draw(h-1, 0, legend, self.normal, True)
         s.refresh()
@@ -492,8 +494,23 @@ class Dashboard:
                     self.execute()
         return True
 
+    def init_status_colors(self):
+        c = self.c
+        if not c.has_colors() or c.COLOR_PAIRS < 8:
+            return
+        for number, state, fg, bg in (
+                (5, "RUNNING", c.COLOR_BLACK, c.COLOR_YELLOW),
+                (6, "OK", c.COLOR_BLACK, c.COLOR_GREEN),
+                (7, "ERROR", c.COLOR_WHITE, c.COLOR_RED)):
+            try:
+                c.init_pair(number, fg, bg)
+                self.status_styles[state] = c.color_pair(number) | c.A_BOLD
+            except c.error:
+                pass
+
     def run(self):
         self.screen.keypad(True)
+        self.init_status_colors()
         try:
             self.c.curs_set(0)
         except self.c.error:
