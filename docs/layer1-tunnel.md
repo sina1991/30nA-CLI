@@ -6,15 +6,16 @@ The public agent exposes SWITCH, NAME, run(argv). A separate Service Agent worke
 
 ```bash
 clear
-30na -host -add -ip 192.0.2.1
-30na -tunnel -help
-30na -tunnel -forward -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80
-30na -tunnel -reverse -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80
+30na -host -list -ids
+30na -tunnel -forward -local-port 8080 -remote-id 3 -remote-port 443
+30na -tunnel -reverse -local-port 8080 -remote-id 3 -remote-port 443
+30na -tunnel -forward -localhost -id 1 -local-port 8080 -remote-ip 192.0.2.10 -remote-port 443
+30na -tunnel -reverse -local-port 8080 -remote-domain ssh.example.test -remote-port 443
 30na -tunnel -list
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-The SSH host must be a registered numeric IPv4/IPv6 address or ASCII fully qualified DNS name; -domain is an alias for -ip. The target must remain a numeric IPv4/IPv6 address and ports must be 1–65535. Host authorization and recovery use the canonical registered name, not a resolved address. OpenSSH resolves the name at connection time. Existing listener policy is unchanged. Forward requests local loopback and Reverse requests remote loopback. A remote sshd must enforce GatewayPorts=no; its policy can override requested binding. No dynamic forwarding.
+Local is always ID 1; the default local IP is loopback. Explicit -ip must be assigned to the local server (or loopback); Forward binds to it, so network exposure requires operator review. Reverse requests remote loopback and targets the chosen local IP. Forward targets remote IPv4 loopback. Port names refer to fixed endpoints, not the listener/target role. Remote address is canonicalized and explicitly registered via authenticated Host IPC; a numbered remote must already exist. Worker verifies the ID/address mapping and registration again, including recovery. Legacy target syntax remains accepted but is hidden in new help; its original loopback policy is unchanged. Remote sshd GatewayPorts policy can override reverse binding. No dynamic forwarding. The new endpoint contract requires endpoint_protocol=1; restart the previous supervisor before upgrading.
 
 ## Readiness and failures
 
@@ -30,7 +31,7 @@ By default, tunnels are not restored. Add the explicit `-restore` switch to a fo
 
 ```bash
 clear
-30na -tunnel -forward -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80 -restore
+30na -tunnel -forward -local-port 8080 -remote-id 3 -remote-port 80 -restore
 ```
 
 Only confirmed ready opted-in sessions are recorded in a RAM-only memfd journal owned by the Tunnel worker and retained by the running Service Agent. The supervisor checks for worker death and recreates it while there is recovery intent, at most three automatic recreations per 60 seconds. The new worker consumes the old intent before attempting recovery, reauthorizes each host using authenticated Host IPC and reissues forwarding with the same ID and a new SSH PID. The `-list` output includes restore=on; while recovering a queued entry can show pid=0. Interrupted/malformed journal writes are discarded rather than replaying older intent.
