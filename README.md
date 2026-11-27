@@ -57,3 +57,5 @@ clear
 clear
 30na -test -all
 ```
+
+[ساخت و دریافت کانفیگ Xray و بررسی IP خروجی](docs/XCONF_GUIDE.md)
