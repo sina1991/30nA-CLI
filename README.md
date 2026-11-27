@@ -1,5 +1,7 @@
 # 30nA-CLI
 
+Tunnel Agent: `30na -tunnel -help` (OpenSSH Forward/Reverse, Host Agent authorization). See [Tunnel documentation](docs/layer1-tunnel.md).
+
 ابزار شخصی Linux با چهار Agent مستقل برای محاسبات، خواندن اطلاعات سیستم و مدیریت فهرست IPها و اتصال با OpenSSH.
 
 ## نصب از GitHub
