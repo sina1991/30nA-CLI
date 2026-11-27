@@ -110,7 +110,7 @@ class EnrollmentTests(unittest.TestCase):
             host.run(args)
         self.assertEqual(out.getvalue().count("HOST_ID 3 REMOTE ssh.example.test"), 2)
         self.assertEqual(request.call_count, 2)
-        enroll.assert_called_with("ssh.example.test", interactive=True)
+        enroll.assert_called_with("ssh.example.test", interactive=True, install=True)
         request.assert_called_with(control.return_value, "register", "ssh.example.test")
 
     @patch("thirtyna.agents.host.control")
@@ -154,3 +154,19 @@ class OrdinaryLoginTests(unittest.TestCase):
             self.assertIn("identitiesonly yes", result.stdout)
             self.assertTrue(config.read_text().endswith(original))
             self.assertEqual(config.stat().st_mode & 0o777, 0o600)
+
+
+class RemoteInstallTests(unittest.TestCase):
+    def test_remote_install_script_parses_and_has_upgrade_guard(self):
+        subprocess.run(["bash", "-n"], input=onboarding.REMOTE_INSTALL,
+                       text=True, check=True)
+        self.assertIn("merge-base --is-ancestor", onboarding.REMOTE_INSTALL)
+        self.assertIn('test "$(cat "$(dirname "$installed")/.revision")" = "$requested"',
+                      onboarding.REMOTE_INSTALL)
+
+    @patch("thirtyna.onboarding.subprocess.run")
+    def test_install_failure_propagates(self, run):
+        run.return_value = subprocess.CompletedProcess([], 1)
+        with self.assertRaisesRegex(RuntimeError, "installation failed"):
+            onboarding.install_remote("ssh.example.test", KEY)
+        self.assertEqual(run.call_args.args[0][-3:], ["root@ssh.example.test", "bash", "-s"])

@@ -79,7 +79,7 @@ def authenticate(address, key, controller, interactive):
         raise RuntimeError("Public key was offered but noninteractive login is not verified; check server policy")
 
 
-def enroll(address, interactive=False):
+def enroll(address, interactive=False, install=False):
     """Verify key-only access before the caller saves the host."""
     if interactive and not sys.stdin.isatty():
         raise RuntimeError("Password authentication requires an interactive terminal")
@@ -91,6 +91,8 @@ def enroll(address, interactive=False):
     try:
         authenticate(address, key, controller, interactive)
         configure_login(address, key)
+        if install:
+            install_remote(address, key)
     except subprocess.TimeoutExpired as exc:
         raise RuntimeError("SSH enrollment timed out") from exc
 
@@ -141,3 +143,47 @@ def configure_login(address, key):
     )
     if result.returncode:
         raise RuntimeError("Ordinary SSH login verification failed")
+
+
+REMOTE_INSTALL = r"""
+set -euo pipefail
+test "$(id -u)" = 0 || { echo "Remote installation requires root"; exit 1; }
+. /etc/os-release
+test "$ID" = ubuntu || { echo "Remote bootstrap requires Ubuntu"; exit 1; }
+if ! command -v git >/dev/null || ! command -v update-ca-certificates >/dev/null; then
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y git ca-certificates
+fi
+work=$(mktemp -d /tmp/30na-host-install.XXXXXX)
+trap 'rm -rf -- "$work"' EXIT
+git clone --quiet https://github.com/sina1991/30nA-CLI.git "$work"
+git -C "$work" checkout --quiet --detach origin/main
+requested=$(git -C "$work" rev-parse HEAD)
+launcher=/usr/local/bin/30na
+if test -e "$launcher"; then
+    installed=$(readlink -f "$launcher")
+    marker="$(dirname "$installed")/.revision"
+    test -f "$marker" || { echo "Installed revision unknown; cannot verify upgrade"; exit 1; }
+    previous=$(cat "$marker")
+    [[ "$previous" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid installed revision"; exit 1; }
+    git -C "$work" cat-file -e "$previous^{commit}" ||
+        git -C "$work" fetch origin "$previous"
+    git -C "$work" merge-base --is-ancestor "$previous" "$requested" ||
+        { echo "Refusing downgrade or divergent release"; exit 1; }
+fi
+echo "INSTALLING_REVISION $requested"
+bash "$work/install.sh" </dev/null
+installed=$(readlink -f "$launcher")
+test "$(cat "$(dirname "$installed")/.revision")" = "$requested"
+"$launcher" -help >/dev/null
+echo "30NA_INSTALL_OK $requested"
+"""
+
+
+def install_remote(address, key):
+    result = subprocess.run(
+        ["ssh", "-T", *ssh_options(key), "--", "root@" + address, "bash", "-s"],
+        input=REMOTE_INSTALL, text=True, timeout=900
+    )
+    if result.returncode:
+        raise RuntimeError("Remote 30na installation failed; host was not registered")

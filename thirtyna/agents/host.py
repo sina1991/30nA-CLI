@@ -48,7 +48,7 @@ def run(argv):
         if agent.get("endpoint_protocol") != 1:
             raise RuntimeError("Restart local Service Agent before enrollment")
         from thirtyna.onboarding import enroll
-        enroll(address, interactive=args.password)
+        enroll(address, interactive=args.password or sys.stdin.isatty(), install=True)
         number = request(agent, "register", address)["value"]
         print(f"HOST_ID {number} REMOTE {address}")
         if args.ssh:
