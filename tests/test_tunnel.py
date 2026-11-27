@@ -490,7 +490,7 @@ class TunnelTests(unittest.TestCase):
         from unittest.mock import patch
         from thirtyna.agents import tunnel
         self.register()
-        with patch.dict(os.environ, self.env), patch("thirtyna.two_vps.start") as start:
+        with patch.dict(os.environ, self.env), patch("thirtyna.onboarding.enroll"), patch("thirtyna.two_vps.start") as start:
             start.side_effect = lambda p: dict(p, id="a"*24, pid=123, state="ready")
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 tunnel.run(["-reverse", "-localhost", "-id", "1", "-local-port", "5555",
