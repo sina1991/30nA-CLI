@@ -429,6 +429,39 @@ class TunnelTests(unittest.TestCase):
         self.assertEqual(result.stdout, "")
         self.assertIn("recovery_rate_limit", result.stderr)
 
+    def test_domain_forward_reverse_and_recovery(self):
+        name = "ssh.example.test"
+        self.cli("-host", "-add", "-domain", "SSH.Example.TEST.")
+        self.cli("-tunnel", "-forward", "-domain", "other.example.test",
+                 "-listen", str(unused_port()), "-target", "127.0.0.1",
+                 "-target-port", "443", code=2)
+        self.assertFalse((self.root / "ssh_calls").exists())
+        for mode in ("forward", "reverse"):
+            output = self.cli("-tunnel", "-" + mode, "-domain", "SSH.EXAMPLE.TEST.",
+                              "-listen", str(unused_port()), "-target", "127.0.0.1",
+                              "-target-port", "443", "-restore").stdout
+            token = output.split()[0].split("=")[1]
+            before = self.wait_state(token, "ready")
+            self.assertEqual(before["host"], name)
+            os.kill(self.worker_pid(), signal.SIGKILL)
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                after = self.wait_state(token, "ready", timeout=5)
+                if before["pid"] != after["pid"]:
+                    break
+                time.sleep(0.05)
+            else:
+                self.fail("Domain tunnel was not restored")
+            self.assertEqual(after["host"], name)
+            self.cli("-tunnel", "-stop", "-id", token)
+        calls = [json.loads(line)["args"] for line in
+                 (self.root / "ssh_calls").read_text().splitlines()]
+        self.assertTrue(all(args[-1] == name for args in calls))
+        self.cli("-tunnel", "-forward", "-domain", name, "-listen",
+                 str(unused_port()), "-target", "bad.example.test",
+                 "-target-port", "443", code=2)
+
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -81,6 +81,26 @@ class CLITests(unittest.TestCase):
         self.invoke("-host", "-remove", "-ip", ip, code=2)
         self.assertEqual(self.invoke("-host", "-list"), "")
 
+
+    def test_domain_host_lifecycle_and_ssh(self):
+        mock = self.dir / "ssh"
+        mock.write_text('#!/bin/sh\nprintf "%s\\n" "$@" > "$XDG_DATA_HOME/domain_calls"\n')
+        mock.chmod(0o755)
+        self.env["PATH"] = str(self.dir) + ":" + self.env["PATH"]
+        self.invoke("-host", "-add", "-ip", "192.0.2.5")
+        self.invoke("-host", "-add", "-domain", "SSH.Example.TEST.")
+        self.assertEqual(self.invoke("-host", "-list").splitlines(),
+                         ["192.0.2.5", "ssh.example.test"])
+        self.invoke("-host", "-add", "-ip", "ssh.example.test", code=2)
+        self.invoke("-host", "-ssh", "-domain", data="SSH.EXAMPLE.TEST\n")
+        self.assertEqual((self.dir / "domain_calls").read_text().splitlines(),
+                         ["-o", "BatchMode=yes", "--", "ssh.example.test"])
+        self.invoke("-host", "-ssh", "-domain", "unregistered.example", code=2)
+        self.invoke("-host", "-add", "-domain", "root@ssh.example.test", code=2)
+        self.invoke("-host", "-add", "-ip", "192.0.2.6", "-domain", "ssh.example.test", code=2)
+        self.invoke("-host", "-remove", "-ip", "SSH.EXAMPLE.TEST.")
+        self.assertEqual(self.invoke("-host", "-list"), "192.0.2.5")
+
     def test_storage_failure(self):
         (self.dir / "30na").touch()
         self.invoke("-host", "-list", code=1)
