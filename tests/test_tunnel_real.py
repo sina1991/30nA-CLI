@@ -195,6 +195,12 @@ LogLevel ERROR
                     conn.close()
 
     def test_opted_in_worker_crash_restores_real_data_transfer(self):
+        self.check_real_recovery("forward")
+
+    def test_opted_in_reverse_worker_crash_restores_real_data_transfer(self):
+        self.check_real_recovery("reverse")
+
+    def check_real_recovery(self, mode):
         from unittest.mock import patch
         from thirtyna.runtime.service import control
         with socket.socket() as target:
@@ -202,7 +208,7 @@ LogLevel ERROR
             target.listen()
             target.settimeout(4)
             listen = unused_port()
-            result = self.start("forward", listen, target.getsockname()[1], restore=True)
+            result = self.start(mode, listen, target.getsockname()[1], restore=True)
             token = result.stdout.split()[0].split("=")[1]
             before = self.wait_state(token, "ready")
             old_pid = next(s for s in before.split() if s.startswith("pid="))

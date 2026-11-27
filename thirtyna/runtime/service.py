@@ -310,23 +310,43 @@ class Supervisor:
             if name == "tunnel":
                 self.recovery_warning = None
         else:
-            if name == "tunnel":
-                self.recover_tunnel()
-            if name in self.children and self.children[name][0].poll() is not None:
-                self.stop(name)
-            if action == "ensure":
+            # A direct child can die after poll() but before the authenticated
+            # readiness exchange. Retry lifecycle lookup once only if its death
+            # is independently confirmed; never retry a live identity mismatch.
+            for attempt in range(2):
                 if name == "tunnel":
-                    self.ensure_host()
+                    self.recover_tunnel()
+                if name in self.children and self.children[name][0].poll() is not None:
+                    self.stop(name)
+                if action == "ensure":
+                    if name == "tunnel":
+                        self.ensure_host()
+                    if name not in self.children:
+                        self.start(name)
                 if name not in self.children:
-                    self.start(name)
-                if name == "tunnel":
-                    self.refresh_tunnel_host()
+                    break
+                proc, _, info = self.children[name]
+                try:
+                    if action == "ensure" and name == "tunnel":
+                        self.refresh_tunnel_host()
+                    reply = request(info, "ready")
+                    if reply["pid"] != info["pid"]:
+                        raise RuntimeError("Unexpected worker PID")
+                except (OSError, ValueError, RuntimeError):
+                    if attempt:
+                        raise
+                    try:
+                        proc.wait(timeout=0.25)
+                    except subprocess.TimeoutExpired:
+                        raise RuntimeError("Live worker readiness exchange failed")
+                    if name == "tunnel":
+                        self.recover_tunnel()
+                    else:
+                        self.stop(name)
+                    continue
+                break
         result = dict(state="down", service_pid=os.getpid(), port_pid=self.allocator.pid)
         if name in self.children:
-            info = self.children[name][2]
-            reply = request(info, "ready")
-            if reply["pid"] != info["pid"]:
-                raise RuntimeError("Unexpected worker PID")
             result.update(info, state="ready", last=reply["last"])
             if action != "ensure":
                 del result["key"]

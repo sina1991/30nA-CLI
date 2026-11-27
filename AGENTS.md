@@ -6,7 +6,7 @@ Read this file first. Do not reload old chat transcripts or the entire repositor
 1. Read the real target branch and SHA, and check whether a related PR already exists.
 2. Read [development status](docs/DEVELOPMENT_STATUS.md), then only the files relevant to the task. Treat current code and observed GitHub status as authoritative; recorded test results are historical.
 3. Work on a feature branch. Preserve public CLI contracts unless explicitly approved. Do not bypass protection or merge without delegated authority.
-4. Run relevant tests and the full suite on Linux before publishing where possible. If execution is unavailable, explicitly label the branch unverified and use PR CI; never merge an unverified code change. Check exact final head and CI, then verify the new main SHA after authorized merge.
+4. Run relevant tests and the full suite on Linux before publishing where possible. If execution is unavailable, explicitly label the branch unverified and use PR CI; never merge an unverified code change. Check exact final head/base and successful no-skip CI; verify the merged tree and main CI after authorized merge.
 
 ## Minimal context map
 | Task | Read first |
@@ -17,7 +17,7 @@ Read this file first. Do not reload old chat transcripts or the entire repositor
 | Forward / reverse tunnels | thirtyna/agents/tunnel.py, thirtyna/runtime/tunnel.py, docs/layer1-tunnel.md, tests/test_tunnel.py, tests/test_tunnel_real.py |
 | Menu / file management | thirtyna/agents/menu.py, thirtyna/menus/, tests/test_menu.py, tests/test_file_manager.py |
 | Install / documentation | install.sh, docs/INSTALLATION_GUIDE.md, docs/CLI_USER_GUIDE.md |
-| Validation | docs/TESTING_GUIDE.md, .github/workflows/ci.yml |
+| Validation | docs/TESTING_GUIDE.md, tests/run_ci.py, .github/workflows/ci.yml, docs/RELEASE_ACCEPTANCE.md |
 
 ## Invariants
 - Public agents expose SWITCH, NAME, run(argv); discovery belongs to core.

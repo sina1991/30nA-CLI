@@ -8,9 +8,9 @@
 | Host Agent / Service Agent / Port Agent | ادغام‌شده در PR #3 |
 | Tunnel Agent Integration | ادغام‌شده در PR #4 با پذیرش مشروط |
 | Tunnel Startup Readiness & Failure Reporting | ادغام‌شده در PR #6؛ CI 35/35 موفق |
-| Session Restoration Policy | پیاده‌سازی Opt-in؛ نتیجه CI این تغییر را بررسی کنید |
+| Session Restoration Policy | PR #7؛ بازیابی Opt-in محدود و تست واقعی |
 | CI Automation | ادغام‌شده در PR #5؛ CI اولیه 27/27 موفق |
-| Final Integration & Acceptance | باز |
+| Final Integration & Acceptance | معیارهای پذیرش در RELEASE_ACCEPTANCE؛ CI نهایی ملاک است |
 
 ## شواهد تاریخی
 - PR #3: گزارش 19/19 تست موفق.
@@ -22,3 +22,5 @@
 
 ## ترتیب ادامه
 CI و Readiness ادغام شده‌اند. بازیابی محدود بعد از Crash، رفع ریسک هم‌زمانی IPC و تست تکمیلی در تغییر جدید؛ پذیرش نهایی وابسته به CI و وضعیت GitHub است. بعد از تغییر قراردادها مستندات CLI و معماری را به‌روز کنید. راهنمای فشرده ایجنت‌ها: [AGENTS.md](../AGENTS.md).
+
+مرجع شواهد و محدوده نهایی: [RELEASE_ACCEPTANCE.md](RELEASE_ACCEPTANCE.md). راهنمای رفع خطا و ارتقا در [TROUBLESHOOTING_GUIDE.md](TROUBLESHOOTING_GUIDE.md) و [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) قرار دارد.
