@@ -66,3 +66,7 @@ check supervisor child membership, and shut down the test runtime.
 ## DNS endpoints
 
 Host validates numeric IPv4/IPv6 or ASCII fully qualified DNS names using thirtyna/address.py. The existing SQLite TEXT primary key is preserved; DNS names are canonicalized to lowercase without a terminal dot. Authorization is for the exact canonical endpoint, not resolved IPs. No network lookup or schema migration is performed at registration. Restart old Service Agents before using domain names.
+
+## Stable host identities
+
+The original hosts table is preserved. The Host worker maintains a companion AUTOINCREMENT host_ids table and migrates existing rows transactionally; ID 1 is reserved with a NULL endpoint and never returned as a remote. IDs start at 2, are not recycled, and persist across worker restarts. Explicit remote addresses use idempotent register; lookup and exists remain authenticated IPC operations. `-host -list -ids` includes the local server from independent OS information; the original `-list` is unchanged for scripts.

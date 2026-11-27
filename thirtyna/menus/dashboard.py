@@ -41,17 +41,22 @@ class Action:
                 if not value.strip():
                     raise ValueError(self.fields[part].name + " is required")
                 args.append(value)
+            elif part == "@local":
+                value = values[0]
+                if not value.strip():
+                    raise ValueError("Select Local ID 1 or a local IP")
+                args.extend(("-localhost", "-id", "1") if value == "1" else ("-ip", value))
+            elif part == "@remote":
+                value = values[2]
+                if not value.strip():
+                    raise ValueError("Select a remote host")
+                args.extend(("-remote-id", value) if value.isascii() and value.isdecimal()
+                            else ("-remote-ip", value))
             elif part == "@protocol":
                 value = values[1].lower()
                 if value not in ("tcp", "udp"):
                     raise ValueError("Protocol must be tcp or udp")
                 args.append("-" + value)
-            elif part == "@restore":
-                value = values[-1].lower()
-                if value not in ("yes", "no"):
-                    raise ValueError("Restore must be yes or no")
-                if value == "yes":
-                    args.append("-restore")
             else:
                 args.append(part)
         return args
@@ -59,12 +64,15 @@ class Action:
 
 def tunnel(mode):
     return Action(mode.capitalize() + " tunnel",
-                  ("-tunnel", "-" + mode, "-domain", 0, "-listen", 1,
-                   "-target", 2, "-target-port", 3, "@restore"),
-                  (Field("Registered IP or domain", picker="host"), Field("Listen port", "5555", "listen"),
-                   Field("Target IP", "127.0.0.1", "target"), Field("Target port", "443", "target-port"),
-                   Field("Restore (yes/no)", "no", "restore")),
-                  hint="Loopback listener; register the SSH host first.")
+                  ("-tunnel", "-" + mode, "@local", "-local-port", 1,
+                   "@remote", "-remote-port", 3),
+                  (Field("Local host (ID 1)", "1", "local"),
+                   Field("Local port", "8080", "local-port"),
+                   Field("Remote host ID/IP/domain", "", "remote"),
+                   Field("Remote port", "443", "remote-port")),
+                  confirm=True,
+                  hint=("Local listener -> remote loopback service." if mode == "forward"
+                        else "Remote loopback listener -> local service."))
 
 
 SYSTEM = ("hostname", "os", "kernel", "uptime", "cpu", "ram", "disk")
@@ -80,7 +88,7 @@ CATALOG = (
     ("System", (Action("All system fields", ("-sys", *("-" + f for f in SYSTEM))),)
      + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM) + (Action("Local interface IPs", ("-sys", "-ip")),)),
     ("Host", (
-        Action("List hosts", ("-host", "-list")),
+        Action("List numbered hosts", ("-host", "-list", "-ids")),
         Action("Register IP or domain", ("-host", "-add", "-domain", 0),
                (Field("IP or domain"),)),
         Action("Connect SSH", ("-host", "-ssh", "-domain", 0),
@@ -108,7 +116,7 @@ CATALOG = (
         ("Service help", ("-service", "-help")), ("Port help", ("-port", "-help"))))),
     ("Services", tuple(Action(title, ("-service", "-" + op)) for title, op in (
         ("Active services", "active"), ("All loaded services", "list"),
-        ("Installed unit files", "installed"), ("30nA worker status", "workers")))
+        ("Installed unit files", "installed"), ("30nA worker status", "workers"), ("Managed unit history", "managed")))
      + tuple(Action(op.capitalize() + " service", ("-service", "-" + op, "-unit", 0),
                     (Field("Service unit", picker="unit"),), confirm=op not in ("status", "logs"),
                     hint="Uses system scope; requires existing permissions.")
@@ -171,10 +179,12 @@ class Snapshot:
         self.host_time = None
         self.tunnel_time = None
         self.host_rows = []
+        self.numbered_hosts = None
         self.tunnel_rows = []
         self.system = []
         self.local_ips = None
         self.services = None
+        self.managed = None
         self.ports = None
         self.port_rows = None
         self.workers = None
@@ -182,25 +192,41 @@ class Snapshot:
 
     def invalidate(self, args):
         if args and args[0] == "-port" and "-force" in args:
-            self.ports = self.port_rows = self.services = self.workers = None
+            self.ports = self.port_rows = self.services = self.managed = self.workers = None
             self.tunnels = self.tunnel_time = None
             self.tunnel_rows = []
         if args and (args[0] == "-tunnel" and "-list" not in args or
-                     args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-status", "-logs", "-help")):
+                     args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-managed", "-status", "-logs", "-help")):
             self.ports = self.port_rows = None
         if args and args[0] == "-host" and "-list" not in args:
             self.hosts = self.host_time = None
             self.host_rows = []
+            self.numbered_hosts = None
         if args and args[0] == "-tunnel" and "-list" not in args:
-            self.tunnels = self.tunnel_time = None
-            self.tunnel_rows = []
-        if args and args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-status", "-logs", "-help"):
-            self.services = None
-
-    def observe(self, args, result):
-        if args == ["-host", "-list"]:
             self.hosts = self.host_time = None
             self.host_rows = []
+            self.numbered_hosts = None
+            self.tunnels = self.tunnel_time = None
+            self.tunnel_rows = []
+        if args and args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-managed", "-status", "-logs", "-help"):
+            self.services = self.managed = None
+
+    def observe(self, args, result):
+        if args == ["-host", "-list", "-ids"]:
+            self.hosts = self.host_time = None
+            self.numbered_hosts = None
+            self.host_rows = []
+            if result.code == 0 and not result.truncated:
+                rows = [line.split(None, 2) for line in result.stdout.splitlines()]
+                if rows and len(rows[0]) == 3 and rows[0][:2] == ["1", "LOCAL"] and all(len(r) == 3 and r[0].isascii() and r[0].isdigit() and int(r[0]) >= 2 and r[1] == "REMOTE" for r in rows[1:]):
+                    self.numbered_hosts = [(r[0], r[2]) for r in rows[1:]]
+                    self.host_rows = [r[2] for r in rows[1:]]
+                    self.hosts = len(self.host_rows)
+                    self.host_time = time.strftime("%H:%M:%S")
+        elif args == ["-host", "-list"]:
+            self.hosts = self.host_time = None
+            self.host_rows = []
+            self.numbered_hosts = None
             if result.code == 0 and not result.truncated:
                 self.host_rows = result.stdout.splitlines()
                 self.hosts = len(self.host_rows)
@@ -241,6 +267,8 @@ class Snapshot:
             if result.code == 0 and not result.truncated:
                 self.services = [line.split()[0] for line in result.stdout.splitlines()
                                  if line.split() and line.split()[0].endswith(".service")]
+        elif args == ["-service", "-managed"]:
+            self.managed = None if result.code or result.truncated else set(result.stdout.splitlines())
         elif args == ["-service", "-workers"]:
             self.workers = None
             if result.code == 0 and not result.truncated:
@@ -289,6 +317,9 @@ class Dashboard:
         self.output = []
         self.scroll = 0
         self.side_scroll = 0
+        self.show_system_services = False
+        self.row_styles = {"local": self.accent, "remote": self.accent, "ready": self.active,
+                           "starting": self.warning, "failed": self.warning}
 
     def draw(self, y, x, value, style=0, fill=False, limit=None):
         h, w = self.screen.getmaxyx()
@@ -311,12 +342,12 @@ class Dashboard:
         if self.confirming:
             return "y confirm | n / Esc cancel"
         if self.page == "picker":
-            return "Up/Down or j/k | Enter select | Esc cancel"
+            return "Up/Down | Right/Enter select | Left cancel"
         if self.page in ("result", "overview"):
-            return "j/k or arrows scroll | PgUp/PgDn | Esc back | q quit"
+            return "Up/Down scroll | Left back | PgUp/PgDn | q quit"
         if self.page == "form":
-            return "j/k or Tab | Enter edit/run | f/F2 pick | Esc back"
-        return "j/k Enter open | r refresh | v overview | [ ] panel | Esc | q"
+            return "Up/Down | Right/Enter edit/run | f pick | Left back"
+        return "Up/Down | Right open | Left back | h services | r refresh | v view"
 
     def render(self):
         s = self.screen
@@ -367,7 +398,7 @@ class Dashboard:
             side = self.side_lines()
             self.side_scroll = min(self.side_scroll, max(0, len(side)-region.body))
             for i, line in enumerate(side[self.side_scroll:self.side_scroll+region.body]):
-                self.draw(region.top+i, region.right, line, self.normal, limit=w-region.right-1)
+                self.draw(region.top+i, region.right, line, self.line_style(line), limit=w-region.right-1)
             for y in range(region.top, h-4):
                 self.draw(y, region.left-1, "|", self.accent, limit=1)
                 self.draw(y, region.right-1, "|", self.accent, limit=1)
@@ -382,17 +413,17 @@ class Dashboard:
         if self.page in ("result", "overview"):
             lines = []
             for line in (self.output if self.page == "result" else self.overview_lines()):
-                lines.extend(textwrap.wrap(label(line), max(1, region.width-1),
-                                           replace_whitespace=False, drop_whitespace=False) or [""])
+                lines.extend((part, self.line_style(line)) for part in (textwrap.wrap(label(line), max(1, region.width-1),
+                                           replace_whitespace=False, drop_whitespace=False) or [""]))
             self.scroll = min(self.scroll, max(0, len(lines)-body))
-            for i, line in enumerate(lines[self.scroll:self.scroll+body]):
-                self.draw(region.top+i, region.left, line, limit=region.width)
+            for i, (line, style) in enumerate(lines[self.scroll:self.scroll+body]):
+                self.draw(region.top+i, region.left, line, style, limit=region.width)
         elif self.page == "picker":
             first = max(0, self.choice_index-body+1)
             for i, (_, desc) in enumerate(self.choices[first:first+body], first):
                 selected = i == self.choice_index
                 self.draw(region.top+i-first, region.left, ("> " if selected else "  ") + desc,
-                          self.active if selected else self.normal, fill=selected, limit=region.width)
+                          self.active if selected else self.line_style(desc), fill=selected, limit=region.width)
         else:
             if self.page == "home":
                 rows = ([a.title for a in CATALOG[self.index][1]] if region.expanded else
@@ -422,7 +453,10 @@ class Dashboard:
                 self.draw(region.top+i-first, region.left, ("> " if selected else "  ") + line,
                           self.active if selected else self.normal, fill=selected, limit=region.width)
         if self.confirming:
-            self.draw(h-4, 0, " CONFIRM: " + self.action.title + "? ", self.warning, True)
+            prompt = self.action.title
+            if self.action.args[:2] == ("-tunnel", "-forward") and self.values[0] != "1":
+                prompt = "Bind listener on " + self.values[0] + " (review exposure)"
+            self.draw(h-4, 0, " CONFIRM: " + prompt + "? ", self.warning, True)
         else:
             self.draw(h-4, 0, self.snapshot.summary(compact=w < 74),
                       self.warning if self.snapshot.tunnels and self.snapshot.tunnels["failed"]
@@ -446,7 +480,7 @@ class Dashboard:
                 keys = "j/k Enter r v:view q"
             legend = "H:hosts P:TCP/UDP ports"
         self.draw(h-2, 0, keys, self.accent, True)
-        self.draw(h-1, 0, legend + " | v Overview | " + (self.snapshot.overview_time or "--"), self.normal, True)
+        self.draw(h-1, 0, (" h: SYSTEM UNITS " + ("SHOWN" if self.show_system_services else "HIDDEN") + " | " + legend + " | [ ] panel"), self.normal, True)
         s.refresh()
 
     def set_result(self, args, result):
@@ -472,13 +506,28 @@ class Dashboard:
                                 "Retry the tunnel after verified noninteractive SSH works."])
         self.page, self.scroll = "result", 0
 
+    def line_style(self, line):
+        words = line.split()
+        if len(words) > 1 and words[0].isdigit():
+            if words[1] == "LOCAL":
+                return self.row_styles["local"]
+            if words[1] == "REMOTE":
+                return self.row_styles["remote"]
+        if line.startswith("LOCAL #"):
+            return self.row_styles["local"]
+        if line.startswith("REMOTE #"):
+            return self.row_styles["remote"]
+        for state in ("ready", "starting", "failed"):
+            if line.startswith(("F " + state.upper(), "R " + state.upper())) or "state=" + state in words:
+                return self.row_styles[state]
+        return self.normal
+
     def side_lines(self):
         snap = self.snapshot
-        rows = ["ACTIVE SERVICES: " + ("?" if snap.services is None else str(len(snap.services))), "WORKERS"]
-        rows += ([f"{name}: {snap.workers[name]}" for name in ("supervisor", "port", "host", "tunnel")]
-                 if snap.workers else ["Unknown"])
-        rows += ["HOSTS: " + ("?" if snap.hosts is None else str(snap.hosts))]
-        rows += snap.host_rows if snap.host_rows else (["None"] if snap.hosts == 0 else [])
+        rows = ["LOCAL #1 " + self.local_ip_text(), "REMOTE HOSTS: " + ("?" if snap.hosts is None else str(snap.hosts))]
+        rows += [f"REMOTE #{i} {ip}" for i, ip in (snap.numbered_hosts or [])]
+        if snap.hosts == 0:
+            rows.append("None")
         rows += ["TUNNELS R/S/F"]
         if snap.tunnels is None:
             rows += ["Unknown"]
@@ -488,7 +537,23 @@ class Dashboard:
                 words = line.split()
                 if len(words) >= 5:
                     state = next((v[6:] for v in words if v.startswith("state=")), "?")
-                    rows.append(f"{words[3]} {state} {words[2]}")
+                    remote = next((v[10:] for v in words if v.startswith("remote_id=")), "?")
+                    local_ep = next((v[6:] for v in words if v.startswith("local=")), "")
+                    remote_ep = next((v[7:] for v in words if v.startswith("remote=")), "")
+                    direction = "F" if words[1] == "forward" else "R"
+                    if local_ep and remote_ep:
+                        ports = local_ep.rsplit(":", 1)[-1] + (">" if direction == "F" else "<") + remote_ep.rsplit(":", 1)[-1]
+                    else:
+                        ports = ":" + words[3]
+                    rows.append(f"{direction} {state.upper()} #{remote} {ports}")
+        rows += ["30nA WORKERS"]
+        rows += ([f"{name}: {snap.workers[name]}" for name in ("supervisor", "port", "host", "tunnel")]
+                 if snap.workers else ["Unknown"])
+        rows += ["MANAGED ACTIVE UNITS"]
+        if snap.services is None or snap.managed is None:
+            rows += ["Unknown"]
+        else:
+            rows += [unit for unit in snap.services if unit in snap.managed] or ["None"]
         rows += ["PORTS TCP/UDP"]
         if snap.ports is None:
             rows += ["Unknown"]
@@ -497,8 +562,11 @@ class Dashboard:
             for line in snap.port_rows:
                 words = line.split()
                 rows.append(f"{words[0]} {words[3][5:]} {words[4][5:]}")
-        rows += ["SERVICE NAMES"]
-        rows += snap.services if snap.services else (["None"] if snap.services == [] else [])
+        if self.show_system_services:
+            rows += ["ALL ACTIVE SYSTEM UNITS"]
+            rows += snap.services if snap.services else (["None"] if snap.services == [] else ["Unknown"])
+        else:
+            rows += ["SYSTEM UNITS HIDDEN (h)"]
         return rows
 
     def local_ip_text(self):
@@ -512,7 +580,7 @@ class Dashboard:
                 "Registered host does not mean connected. Use agent lists for full details."]
 
     def refresh_overview(self):
-        for args in (["-sys", *("-" + f for f in SYSTEM)], ["-sys", "-ip"], ["-service", "-active"], ["-service", "-workers"], ["-port", "-list"]):
+        for args in (["-sys", *("-" + f for f in SYSTEM)], ["-sys", "-ip"], ["-service", "-active"], ["-service", "-managed"], ["-service", "-workers"], ["-port", "-list"]):
             self.snapshot.observe(args, self.runner(args))
         self.snapshot.overview_time = time.strftime("%H:%M:%S")
         self.side_scroll = 0
@@ -521,7 +589,7 @@ class Dashboard:
         self.status, self.detail = "RUNNING", "Refreshing dashboard"
         self.render()
         results = []
-        for args in (["-host", "-list"], ["-tunnel", "-list"]):
+        for args in (["-host", "-list", "-ids"], ["-tunnel", "-list"]):
             result = self.runner(args)
             self.snapshot.observe(args, result)
             results.append(result)
@@ -531,14 +599,26 @@ class Dashboard:
             self.status = "ERROR refresh"
             self.detail = "Counts incomplete; open agent list for details"
         else:
-            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.workers is None or self.snapshot.ports is None else "Counts refreshed")
+            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.managed is None or self.snapshot.workers is None or self.snapshot.ports is None else "Counts refreshed")
 
     def open_picker(self):
         field = self.action.fields[self.index]
         kind = field.picker
         self.status, self.detail = "RUNNING", "Loading choices"
         self.render()
-        if kind in ("host", "tunnel", "unit"):
+        if kind in ("host", "remote"):
+            args = ["-host", "-list", "-ids"]
+            result = self.runner(args)
+            self.snapshot.observe(args, result)
+            self.choices = [(i if kind == "remote" else ip, f"{i} REMOTE {ip}")
+                            for i, ip in (self.snapshot.numbered_hosts or [])]
+            self.choices.append((None, "[Enter IP or domain]"))
+        elif kind == "local":
+            args = ["-sys", "-ip"]
+            self.snapshot.observe(args, self.runner(args))
+            self.choices = [("1", "1 LOCAL (loopback default)")]
+            self.choices += [(ip, "1 LOCAL " + ip) for ip in self.snapshot.local_ips or []]
+        elif kind in ("tunnel", "unit"):
             commands = ([["-service", "-installed"], ["-service", "-list"]] if kind == "unit"
                         else [["-" + kind, "-list"]])
             rows = {}
@@ -560,13 +640,8 @@ class Dashboard:
             elif not self.choices:
                 self.choices.append((None, "[Enter tunnel ID manually]"))
         else:
-            local_ips = []
-            if kind == "target":
-                result = self.runner(["-sys", "-ip"])
-                self.snapshot.observe(["-sys", "-ip"], result)
-                local_ips = self.snapshot.local_ips or []
-            self.choices = suggestions(kind, self.values[self.index], local_ips)
-        self.choice_index = 0
+            self.choices = suggestions(kind, self.values[self.index])
+        self.choice_index = next((i for i, (value, _) in enumerate(self.choices) if value == self.values[self.index]), 0)
         self.page = "picker"
         self.status, self.detail = "OK", "Select a value or enter custom"
 
@@ -603,6 +678,25 @@ class Dashboard:
         else:
             result = self.runner(args)
         self.set_result(args, result)
+        if result.code == 0:
+            self.refresh_after_action(args)
+
+    def refresh_after_action(self, args):
+        """Refresh affected snapshots after successful explicit mutations."""
+        commands = []
+        if args[:2] in (["-tunnel", "-forward"], ["-tunnel", "-reverse"], ["-tunnel", "-stop"]):
+            commands = [["-host", "-list", "-ids"], ["-tunnel", "-list"],
+                        ["-service", "-workers"], ["-port", "-list"]]
+        elif args[:2] in (["-host", "-add"], ["-host", "-remove"]):
+            commands = [["-host", "-list", "-ids"], ["-service", "-workers"]]
+        elif args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-managed", "-status", "-logs", "-help"):
+            commands = [["-service", "-active"], ["-service", "-managed"], ["-port", "-list"]]
+        elif args[:2] == ["-port", "-force"]:
+            commands = [["-port", "-list"], ["-service", "-active"], ["-service", "-managed"], ["-service", "-workers"]]
+        if commands:
+            self.render()
+            for command in commands:
+                self.snapshot.observe(command, self.runner(command))
 
     def back(self):
         if self.page == "overview":
@@ -624,14 +718,14 @@ class Dashboard:
 
     def handle(self, key):
         c = self.c
-        enter = key in ("\n", "\r", c.KEY_ENTER)
+        enter = key in ("\n", "\r", c.KEY_ENTER) or (not self.editing and key == c.KEY_RIGHT)
         if key == c.KEY_RESIZE:
             return True
         if self.editing:
             if enter:
                 self.values[self.index] = self.buffer
                 self.editing = False
-            elif key == "\x1b":
+            elif key in ("\x1b", c.KEY_LEFT):
                 self.editing = False
             elif key in ("\b", "\x7f", c.KEY_BACKSPACE):
                 self.buffer = self.buffer[:-1]
@@ -644,14 +738,18 @@ class Dashboard:
             if key in ("y", "Y"):
                 self.confirming = False
                 self.execute()
-            elif key in ("n", "N", "\x1b"):
+            elif key in ("n", "N", "\x1b", c.KEY_LEFT):
                 self.confirming = False
                 self.status, self.detail = "READY", "Cancelled; no command executed"
             return True
         if key == "q":
             return False
-        if key == "\x1b":
-            return self.back()
+        if key in ("\x1b", c.KEY_LEFT):
+            return True if self.page == "home" and key == c.KEY_LEFT else self.back()
+        if key == "h":
+            self.show_system_services = not self.show_system_services
+            self.side_scroll = 0
+            return True
         h, w = self.screen.getmaxyx()
         if h < 8 or w < 24:
             return True
@@ -730,9 +828,23 @@ class Dashboard:
             except c.error:
                 pass
 
+    def init_row_colors(self):
+        c = self.c
+        if not c.has_colors() or c.COLOR_PAIRS < 13:
+            return
+        for number, key, fg in ((8, "local", c.COLOR_CYAN), (9, "remote", c.COLOR_MAGENTA),
+                                (10, "ready", c.COLOR_GREEN), (11, "starting", c.COLOR_YELLOW),
+                                (12, "failed", c.COLOR_RED)):
+            try:
+                c.init_pair(number, fg, -1)
+                self.row_styles[key] = c.color_pair(number) | c.A_BOLD
+            except c.error:
+                pass
+
     def run(self):
         self.screen.keypad(True)
         self.init_status_colors()
+        self.init_row_colors()
         try:
             self.c.curs_set(0)
         except self.c.error:
@@ -742,7 +854,7 @@ class Dashboard:
         # Do not bootstrap stopped runtime workers merely to draw the dashboard.
         for name in ("host", "tunnel"):
             if self.snapshot.workers and self.snapshot.workers.get(name) == "ready":
-                args = ["-" + name, "-list"]
+                args = ["-host", "-list", "-ids"] if name == "host" else ["-tunnel", "-list"]
                 self.snapshot.observe(args, self.runner(args))
         while True:
             self.render()

@@ -462,6 +462,59 @@ class TunnelTests(unittest.TestCase):
                  "-target-port", "443", code=2)
 
 
+    def test_stable_host_ids_migration_and_endpoint_validation(self):
+        import sqlite3
+        folder = self.root / "30na"
+        folder.mkdir()
+        with sqlite3.connect(folder / "hosts.db") as db:
+            db.execute("CREATE TABLE hosts(ip TEXT PRIMARY KEY)")
+            db.executemany("INSERT INTO hosts VALUES (?)", [("192.0.2.5",), ("ssh.example.test",)])
+        listing = self.cli("-host", "-list", "-ids").stdout.splitlines()
+        self.assertTrue(listing[0].startswith("1 LOCAL "))
+        self.assertEqual(listing[1:], ["2 REMOTE 192.0.2.5", "3 REMOTE ssh.example.test"])
+        self.cli("-host", "-remove", "-ip", "192.0.2.5")
+        self.cli("-host", "-add", "-ip", "192.0.2.1")
+        listing = self.cli("-host", "-list", "-ids").stdout.splitlines()
+        self.assertEqual(listing[1:], ["3 REMOTE ssh.example.test", "4 REMOTE 192.0.2.1"])
+        self.shutdown()
+        self.assertEqual(self.cli("-host", "-list", "-ids").stdout.splitlines()[1:], listing[1:])
+        self.cli("-tunnel", "-forward", "-localhost", "-id", "2", "-local-port", "8080",
+                 "-remote-id", "3", "-remote-port", "443", code=2)
+        self.cli("-tunnel", "-forward", "-local-port", "8080", "-remote-id", "2",
+                 "-remote-port", "443", code=2)
+        self.assertFalse((self.root / "ssh_calls").exists())
+
+    def test_modern_reverse_maps_ports_and_registers_explicit_remote(self):
+        listen = unused_port()
+        out = self.cli("-tunnel", "-reverse", "-localhost", "-id", "1", "-local-port", "443",
+                       "-remote-ip/domain", self.host, "-remote-port", str(listen)).stdout
+        token = out.split()[0].split("=")[1]
+        item = self.wait_state(token, "ready")
+        self.assertEqual(item["local_port"], 443)
+        self.assertEqual(item["remote_port"], listen)
+        self.assertEqual(item["remote_id"], 2)
+        self.assertEqual(item["listen"], listen)
+        self.assertEqual(item["target_port"], 443)
+        self.assertIn("2 REMOTE " + self.host, self.cli("-host", "-list", "-ids").stdout)
+        calls = [json.loads(line)["args"] for line in (self.root / "ssh_calls").read_text().splitlines()]
+        args = next(args for args in calls if "-R" in args)
+        self.assertIn(f"127.0.0.1:{listen}:127.0.0.1:443", args)
+        self.cli("-tunnel", "-stop", "-id", token)
+
+    def test_modern_direct_alias_and_clean_listing(self):
+        listen = unused_port()
+        result = self.cli("-tunnel", "-forward", "-ip", "127.0.0.1", "-listen", str(listen),
+                          "-remote-ip/domain", self.host, "-remote-port", "443")
+        token = result.stdout.split()[0].split("=")[1]
+        self.wait_state(token, "ready")
+        line = self.cli("-tunnel", "-list").stdout
+        self.assertIn("local_id=1 local=127.0.0.1:" + str(listen), line)
+        self.assertIn("remote_id=2 remote=" + self.host + ":443", line)
+        self.assertNotIn("target=", line)
+        help_text = self.cli("-tunnel", "-help").stdout
+        self.assertNotIn("-target-port", help_text)
+        self.cli("-tunnel", "-stop", "-id", token)
+
 
 if __name__ == "__main__":
     unittest.main()

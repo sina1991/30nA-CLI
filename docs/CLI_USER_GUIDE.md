@@ -40,36 +40,26 @@ clear
 
 IP نمونه را برای اتصال با IP سرور خود جایگزین کنید. IPv4، IPv6 و Domain Name کامل (ASCII یا Punycode) پذیرفته می‌شوند. گزینه -domain نام دیگر -ip است. نام دامنه به حروف کوچک تبدیل می‌شود و نقطه انتهایی حذف می‌شود. ثبت دامنه نیاز به DNS آنلاین ندارد. اتصال و تشخیص مقصد بر عهده OpenSSH است. با حذف مقدار پس از -ip، ورودی از ترمینال، Pipe یا فایل خوانده می‌شود. برای اتصال به Host ثبت‌شده از 30na -host -ssh -ip ADDRESS استفاده کنید. برای ثبت و سپس اتصال، 30na -host -add -ip ADDRESS -ssh را اجرا کنید. خطای ثبت از اجرای SSH جلوگیری می‌کند. خطای اتصال بعد از ثبت، Host را در فهرست نگه می‌دارد. OpenSSH تنظیمات معمول کاربر را می‌خواند و در ورودی غیرتعاملی با BatchMode=yes اجرا می‌شود.
 
-## Tunnel
+## Tunnel — Local / Remote
+
+شناسه ۱ همیشه سرور اجراکننده برنامه است و نیازی به ثبت ندارد. Remote ID از ۲ شروع می‌شود و با حذف Hostهای دیگر تغییر نمی‌کند. هنگام ارتقا، شناسه Hostهای موجود یک بار به ترتیب آدرس تخصیص می‌یابد؛ سپس پایدار است. ابتدا شماره واقعی Remote را در فهرست ببینید؛ شماره ۳ و آدرس‌های زیر نمونه‌اند.
 
 ```bash
 clear
-30na -tunnel -help
-30na -tunnel -forward -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80
-30na -tunnel -reverse -ip 192.0.2.1 -listen 8080 -target 127.0.0.1 -target-port 80
+30na -host -list -ids
+30na -tunnel -forward -local-port 8080 -remote-id 3 -remote-port 443
+30na -tunnel -reverse -local-port 8080 -remote-id 3 -remote-port 443
+30na -tunnel -forward -localhost -id 1 -local-port 8080 -remote-ip 192.0.2.10 -remote-port 443
+30na -tunnel -reverse -local-port 8080 -remote-domain ssh.example.test -remote-port 443
 30na -tunnel -list
 30na -tunnel -stop -id TUNNEL_ID
 ```
 
-آدرس `-ip` باید پیش‌تر در Host Agent ثبت شده باشد. در Forward پورت روی Loopback محلی و در Reverse درخواست Loopback به میزبان SSH ارسال می‌شود؛ سرور باید GatewayPorts=no را اعمال کند. احراز هویت SSH باید غیرتعاملی باشد. خروجی `state=starting` به‌معنی انتظار برای تأیید OpenSSH است. با `-list` وضعیت `ready` (تأیید Forwarding، نه دسترسی قطعی به Target) یا `failed` و `reason` را بررسی کنید. با `-stop` اتصال یا رکورد خطا را حذف کنید. جزئیات در [مستند معماری Tunnel](layer1-tunnel.md) آمده است.
+Local Port و Remote Port با تغییر جهت ثابت می‌مانند. Forward: روی Local Port گوش می‌دهد و به 127.0.0.1:Remote Port از سمت سرور SSH می‌رود. Reverse: روی Remote Port در سرور SSH گوش می‌دهد و به Local IP:Local Port می‌رود. پیش‌فرض Local IP برابر 127.0.0.1 است. با -ip می‌توان IP عددی متعلق به همین سرور را صریحاً انتخاب کرد؛ در Forward این انتخاب Listener را روی همان رابط باز می‌کند و ممکن است آن را در شبکه قابل دسترسی کند، پس Firewall را متناسب تنظیم کنید. Remote Listener در Reverse درخواست Loopback دارد؛ GatewayPorts روی sshd می‌تواند آن را تغییر دهد.
 
-برای بازیابی خودکار بعد از Crash شدن Tunnel Worker، گزینه `-restore` را هنگام ایجاد Tunnel اضافه کنید. بازیابی فقط برای Session آماده و در طول عمر همان Service Agent انجام می‌شود. توقف صریح، بازیابی را لغو می‌کند. قطع عادی SSH یا Restart کامل Service Agent باعث اتصال مجدد خودکار نمی‌شود.
+با -remote-ip یا -remote-domain آدرس Remote مشخص می‌شود و Host Agent آن را در صورت نیاز ثبت می‌کند. با -remote-id فقط Host ثبت‌شده انتخاب می‌شود. هر دو روش به تنظیم صحیح User، SSH Port، کلید و Host Key معتبر نیاز دارند. رمز عبور یا کلید در برنامه ذخیره نمی‌شود. سوییچ قدیمی -listen در قرارداد جدید نام دیگر Local Port است، نه Listener در هر دو جهت. سوییچ‌های Target قدیمی فقط برای سازگاری اسکریپت‌ها حفظ شده‌اند و در منو و Help جدید نمایش داده نمی‌شوند. گزینه اختیاری -restore همچنان برای بازیابی محدود Worker باقی است.
 
-وضعیت failed در خروجی -list یک رکورد خطا است و به معنی موفقیت اتصال نیست؛ Exit Code صفر -list فقط موفق بودن عملیات فهرست را نشان می‌دهد. برای تشخیص Reasonها و ارتقا، [راهنمای عیب‌یابی](TROUBLESHOOTING_GUIDE.md) را ببینید.
-
-## اتصال با Domain Name
-
-```bash
-clear
-30na -host -add -domain ssh.example.test
-30na -host -ssh -domain ssh.example.test
-30na -tunnel -forward -domain ssh.example.test -listen 5555 -target 127.0.0.1 -target-port 443
-30na -tunnel -reverse -domain ssh.example.test -listen 5556 -target 127.0.0.1 -target-port 443 -restore
-30na -tunnel -list
-30na -host -remove -domain ssh.example.test
-```
-
-دامنه نمونه را با دامنه سرور مجاز خود جایگزین کنید. ثبت دامنه، IPهای حاصل از DNS را جداگانه مجاز نمی‌کند و برعکس. User و Port و کلید SSH از تنظیمات OpenSSH خوانده می‌شوند؛ عبارت user@domain را به‌عنوان مقدار -domain وارد نکنید. گزینه -target همچنان IP عددی می‌پذیرد. Listenerهای Tunnel Agent همچنان Loopback هستند. برای استفاده در Systemd و تفاوت Listener عمومی، [راهنمای اتصال دامنه](DOMAIN_SSH_GUIDE.md) را بخوانید. پیش از استفاده از قابلیت جدید Service Agent قدیمی را مطابق راهنمای نصب متوقف و نسخه جدید را نصب کنید.
+وضعیت ready تأیید Forwarding توسط OpenSSH است، نه تضمین دسترسی به سرویس مقصد. برای Stop، از Tunnel ID خروجی استفاده کنید، نه Host ID. جزئیات: [معماری Tunnel](layer1-tunnel.md).
 
 ## مرکز کنترل TUI
 

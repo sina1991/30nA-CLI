@@ -351,6 +351,7 @@ class Supervisor:
             if action != "ensure":
                 del result["key"]
         result["domain_support"] = True
+        result["endpoint_protocol"] = 1
         if name == "tunnel":
             result["tunnel_protocol"] = 2
             if self.recovery_warning:

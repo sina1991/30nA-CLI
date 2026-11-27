@@ -25,3 +25,9 @@
 CI و Readiness ادغام شده‌اند. بازیابی محدود بعد از Crash، رفع ریسک هم‌زمانی IPC و تست تکمیلی در تغییر جدید؛ پذیرش نهایی وابسته به CI و وضعیت GitHub است. بعد از تغییر قراردادها مستندات CLI و معماری را به‌روز کنید. راهنمای فشرده ایجنت‌ها: [AGENTS.md](../AGENTS.md).
 
 مرجع شواهد و محدوده نهایی: [RELEASE_ACCEPTANCE.md](RELEASE_ACCEPTANCE.md). راهنمای رفع خطا و ارتقا در [TROUBLESHOOTING_GUIDE.md](TROUBLESHOOTING_GUIDE.md) و [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) قرار دارد.
+
+## Endpoint model
+
+Local ID 1, stable remote IDs, fixed local/remote ports. Validate current PR CI.
+
+نسخه قبلی PR #10 با 85/85 CI تأیید شده است. تغییر قرارداد Tunnel در PR جدید با تست جداگانه بررسی می‌شود.

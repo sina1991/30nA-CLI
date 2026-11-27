@@ -18,7 +18,7 @@ clear
 30na -help
 30na -calc -add 10 20
 30na -sys -hostname -kernel
-30na -host -list
+30na -host -list -ids
 ```
 
 [نصب](docs/INSTALLATION_GUIDE.md) · [دستورات](docs/CLI_USER_GUIDE.md) · [معماری](docs/ARCHITECTURE_GUIDE.md) · [توسعه Agent](docs/AGENT_DEVELOPMENT_GUIDE.md) · [تست](docs/TESTING_GUIDE.md) · [وضعیت](docs/DEVELOPMENT_STATUS.md)
@@ -89,3 +89,5 @@ clear
 [راهنمای Systemd Service Agent](docs/SYSTEMD_SERVICE_GUIDE.md) · [Dashboard چندپنلی](docs/TUI_GUIDE.md)
 
 [راهنمای Port Agent](docs/PORT_AGENT_GUIDE.md)
+
+[قرارداد جدید Local/Remote و شناسه Host](docs/layer1-tunnel.md)
