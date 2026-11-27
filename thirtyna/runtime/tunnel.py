@@ -133,15 +133,13 @@ def _management_options(parameters):
     # scripts and hosts without an imported pair retain SSH config behavior.
     if parameters["mode"] != "forward" or "remote_id" not in parameters:
         return []
-    from thirtyna.ssh_identity import existing_identity, identity_options
-    from thirtyna.onboarding import verify_identity_config
+    from thirtyna.ssh_identity import existing_identity
+    from thirtyna.onboarding import authentication_options, verify_identity_config
     key = existing_identity()
     if key is None:
         return []
     verify_identity_config(parameters["host"], key)
-    return [*identity_options(key), "-o", "IdentityAgent=none",
-            "-o", "CertificateFile=none", "-o", "PreferredAuthentications=publickey",
-            "-o", "StrictHostKeyChecking=yes"]
+    return authentication_options(key)
 
 
 def _launch(token, parameters, restore):

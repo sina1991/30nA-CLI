@@ -1,5 +1,7 @@
 # Layer 1 Tunnel Agent
 
+For boot-persistent Forward and Reverse and lifecycle commands, see the [operator quickstart](TUNNEL_QUICKSTART.md).
+
 The public agent exposes SWITCH, NAME, run(argv). A separate Service Agent worker owns tunnel processes and authorizes every new start through Host Agent authenticated IPC; it never opens hosts.db. The shared Port Agent allocates worker control sockets only. OpenSSH owns forwarding listeners.
 
 ## CLI contract

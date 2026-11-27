@@ -10,39 +10,22 @@ from thirtyna import onboarding
 from thirtyna.agents import host
 from thirtyna.core import UsageError
 
-REV = "a" * 40
 KEY = Path("/tmp/fixture/.ssh/30na-management/identity")
 CONTROLLER = "0" * 64
 REMOTE_MACHINE = b"1234567890abcdef1234567890abcdef"
 
 
 class EnrollmentTests(unittest.TestCase):
+    @patch("thirtyna.onboarding.configure_login")
     @patch("thirtyna.onboarding.authenticate")
     @patch("thirtyna.onboarding.import_identity", return_value=KEY)
     @patch("thirtyna.onboarding.subprocess.run")
-    @patch("thirtyna.onboarding.controller_revision", return_value=REV)
-    def test_key_enrollment_pins_revision_and_strict_identity(self, revision, run, key, auth):
-        run.return_value = subprocess.CompletedProcess([], 0, "INSTALLED\nENROLLMENT_OK\n", "")
-        with contextlib.redirect_stdout(io.StringIO()):
-            onboarding.enroll("ssh.example.test")
-        argv = run.call_args.args[0]
-        self.assertIn("StrictHostKeyChecking=yes", argv)
-        self.assertIn("BatchMode=yes", argv)
-        self.assertIn("PreferredAuthentications=publickey", argv)
-        self.assertIn("ForwardAgent=no", argv)
-        self.assertIn("IdentityAgent=none", argv)
-        self.assertIn(str(KEY), argv)
-        self.assertEqual(argv[-4:], ["--", "ssh.example.test", "python3", "-"])
-        script = run.call_args.kwargs["input"]
-        compile(script, "<remote>", "exec")
-        self.assertIn(REV, script)
-        self.assertNotIn("__CONTROLLER__", script)
-        self.assertNotIn("systemctl', 'stop", script)
-        self.assertIn("INSTALL_DEPS='0'", script)
-        self.assertIn("launcher.resolve().parent / '.revision'", script)
-        self.assertIn("Endpoint is the local machine", script)
+    def test_enrollment_requires_only_ssh_access(self, run, key, auth, configure):
+        onboarding.enroll("ssh.example.test")
         auth.assert_called_once()
+        self.assertEqual(auth.call_args.args[:2], ("ssh.example.test", KEY))
         self.assertFalse(auth.call_args.args[-1])
+        run.assert_not_called()
 
     @patch("thirtyna.onboarding.verify_identity_config")
     @patch("thirtyna.onboarding.distinct_probe")
@@ -111,16 +94,6 @@ class EnrollmentTests(unittest.TestCase):
             onboarding.enroll("ssh.example.test", interactive=True)
         run.assert_not_called()
 
-    @patch("thirtyna.onboarding.authenticate")
-    @patch("thirtyna.onboarding.import_identity", return_value=KEY)
-    @patch("thirtyna.onboarding.subprocess.run")
-    @patch("thirtyna.onboarding.controller_revision", return_value=REV)
-    def test_failed_ssh_or_missing_completion(self, revision, run, key, auth):
-        for code, output in ((255, ""), (0, "INSTALLED\n"), (0, "FAKE_ENROLLMENT_OK\n"), (1, "ENROLLMENT_OK\n")):
-            run.return_value = subprocess.CompletedProcess([], code, output, "private diagnostic")
-            with contextlib.redirect_stdout(io.StringIO()), self.assertRaises(RuntimeError):
-                onboarding.enroll("ssh.example.test")
-
     @patch("thirtyna.agents.host.request")
     @patch("thirtyna.agents.host.control", return_value={"endpoint_protocol": 1, "domain_support": True})
     @patch("thirtyna.onboarding.enroll")
@@ -143,7 +116,41 @@ class EnrollmentTests(unittest.TestCase):
     @patch("thirtyna.agents.host.control")
     def test_invalid_options_do_not_connect(self, control):
         for args in (["-list", "-onboard"], ["-add", "-ip", "192.0.2.1", "-onboard", "-ssh"],
-                     ["-add", "-ip", "192.0.2.1", "-password"]):
+                     ["-list", "-password"]):
             with self.assertRaises(UsageError):
                 host.run(args)
         control.assert_not_called()
+
+class RequiredEnrollmentTests(unittest.TestCase):
+    @patch("thirtyna.agents.host.request")
+    @patch("thirtyna.agents.host.control", return_value={"endpoint_protocol": 1, "domain_support": True})
+    @patch("thirtyna.onboarding.enroll", side_effect=RuntimeError("SSH key login failed"))
+    def test_plain_add_requires_authentication(self, enroll, control, request):
+        with self.assertRaisesRegex(RuntimeError, "SSH key login failed"):
+            host.run(["-add", "-ip", "192.0.2.1"])
+        request.assert_not_called()
+
+
+class OrdinaryLoginTests(unittest.TestCase):
+    def test_config_is_parsed_by_openssh_and_repeated_registration_is_stable(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            ssh = Path(temp)
+            directory = ssh / "30na-management"
+            directory.mkdir()
+            key = directory / "identity"
+            config = ssh / "config"
+            config.write_text("Host existing.example\n    User operator\n")
+            original = config.read_text()
+            with patch("thirtyna.onboarding.subprocess.run") as run:
+                run.return_value = subprocess.CompletedProcess([], 0)
+                onboarding.configure_login("new.example", key)
+                first = config.read_text()
+                onboarding.configure_login("new.example", key)
+                self.assertEqual(config.read_text(), first)
+            result = subprocess.run(["ssh", "-G", "-F", str(config), "root@new.example"],
+                                    capture_output=True, text=True, check=True)
+            self.assertIn("identityfile " + str(key), result.stdout)
+            self.assertIn("identitiesonly yes", result.stdout)
+            self.assertTrue(config.read_text().endswith(original))
+            self.assertEqual(config.stat().st_mode & 0o777, 0o600)

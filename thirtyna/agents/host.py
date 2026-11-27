@@ -20,11 +20,11 @@ def run(argv):
     endpoint.add_argument("-ip", nargs="?", const="", metavar="ADDRESS", help="IPv4, IPv6 or DNS name")
     endpoint.add_argument("-domain", dest="ip", nargs="?", const="", metavar="NAME", help="Alias for -ip")
     cli.add_argument("-ssh", action="store_true")
-    cli.add_argument("-onboard", action="store_true", help="With -add: authenticate, deploy controller revision and inspect remote")
+    cli.add_argument("-onboard", action="store_true", help="With -add: verify SSH access and register the management public key if needed")
     cli.add_argument("-password", action="store_true", help="Interactive SSH authentication (key/passphrase/password); never a password value")
     cli.add_argument("-ids", action="store_true", help="Numbered local/remote inventory (with -list)")
     args = cli.parse_args(argv)
-    if args.password and not args.onboard:
+    if args.password and not args.add:
         raise UsageError("-password requires -onboard and an interactive terminal")
     if args.onboard and (not args.add or args.ssh or args.ids or args.ip is None):
         raise UsageError("Use -add -ip ADDRESS -onboard")
@@ -44,13 +44,15 @@ def run(argv):
         address = host_address(args.ip or input_value("IP address:"))
         if is_domain(address) and not agent.get("domain_support"):
             raise RuntimeError("Restart Service Agent before using domain names")
-    if args.onboard:
+    if args.add:
         if agent.get("endpoint_protocol") != 1:
             raise RuntimeError("Restart local Service Agent before enrollment")
         from thirtyna.onboarding import enroll
         enroll(address, interactive=args.password)
         number = request(agent, "register", address)["value"]
         print(f"HOST_ID {number} REMOTE {address}")
+        if args.ssh:
+            return run(["-ssh", "-ip", address])
         return 0
     op = "list" if args.list else "add" if args.add else "remove" if args.remove else "exists"
     reply = request(agent, op, address)
@@ -59,10 +61,12 @@ def run(argv):
             print(ip)
     if args.ssh:
         options = [] if sys.stdin.isatty() else ["-o", "BatchMode=yes"]
-        from thirtyna.ssh_identity import existing_identity, identity_options
+        from thirtyna.ssh_identity import existing_identity
         key = existing_identity()
         if key is not None:
-            options += identity_options(key)
+            from thirtyna.onboarding import ssh_options, verify_identity_config
+            verify_identity_config(address, key)
+            options = ssh_options(key)
         status = subprocess.run(["ssh", *options, "--", address]).returncode
         if status:
             raise RuntimeError(f"SSH exited with status {status}")

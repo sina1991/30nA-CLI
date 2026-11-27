@@ -52,7 +52,7 @@ def existing_identity(home=None):
     return key
 
 
-def import_identity(home=None):
+def import_identity(home=None, create=False):
     home = Path.home() if home is None else Path(home)
     ssh = home / ".ssh"
     private_dir(ssh)
@@ -67,16 +67,22 @@ def import_identity(home=None):
         if current is not None:
             return current
         source = home / "30na_windows"
-        secret = read_key(source, True)
-        public = read_key(source.with_suffix(".pub"), False)
+        generate = create and not os.path.lexists(source) and not os.path.lexists(source.with_suffix(".pub"))
+        if not generate:
+            secret = read_key(source, True)
+            public = read_key(source.with_suffix(".pub"), False)
         with tempfile.TemporaryDirectory(prefix=".30na-import-", dir=ssh) as temp:
             staging = Path(temp) / "pair"
             staging.mkdir(mode=0o700)
             key = staging / "identity"
-            for path, data in ((key, secret), (key.with_suffix(".pub"), public)):
-                fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-                with os.fdopen(fd, "wb") as output:
-                    output.write(data)
+            if generate:
+                subprocess.run(["ssh-keygen", "-q", "-t", "ed25519", "-N", "", "-f", str(key)],
+                               stdin=subprocess.DEVNULL, capture_output=True, check=True, timeout=10)
+            else:
+                for path, data in ((key, secret), (key.with_suffix(".pub"), public)):
+                    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                    with os.fdopen(fd, "wb") as output:
+                        output.write(data)
             validate_pair(key)
             destination = ssh / "30na-management"
             staging.rename(destination)

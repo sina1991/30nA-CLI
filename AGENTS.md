@@ -44,7 +44,7 @@ Local IP discovery: `thirtyna/agents/sysinfo.py` (`-sys -ip`) uses local interfa
 
 Public Port Inspection Agent: `thirtyna/agents/port.py`, `tests/test_port.py`, `docs/PORT_AGENT_GUIDE.md`. Distinct from runtime allocator; read-only by default. Explicit -force is the only public emergency release exception; verify exact owner, protect SSH/runtime/ancestors, never indiscriminately kill listeners. Owner/unit unknown when unavailable.
 
-Host onboarding: `thirtyna/onboarding.py`, `docs/HOST_ONBOARDING.md`, `tests/test_onboarding.py`. Deploy only pinned controller revision after SSH host verification. Native interactive SSH prompts only; never store passwords. No automatic privilege escalation, dependency installation, worker restart or service mutation. Preserve offline registration.
+Host onboarding: `thirtyna/onboarding.py`, `docs/HOST_ONBOARDING.md`, `tests/test_onboarding.py`. Verify host identity and key-only access before saving the host. Native interactive SSH prompts only; never store passwords. No automatic privilege escalation, dependency installation, worker restart or service mutation. All public Host additions require verified key-only access. Test fixtures may seed isolated inventories directly.
 
 Management identity: `thirtyna/ssh_identity.py` validates and copies the operator's own local `30na_windows` pair into a private directory. Never include key contents in Git, output or IPC. Explicit interactive enrollment permits ssh-copy-id of the public key only after verified remote identity; verify key-only access before installation/registration. Existing authorized keys are preserved.
 
@@ -52,4 +52,4 @@ External SSH tunnel discovery: `thirtyna/remote_probe.py`, `thirtyna/tunnel_inve
 
 Two-VPS reverse engine: `thirtyna/two_vps.py`, `thirtyna/reverse_peer.py`, `tests/test_two_vps.py`. New reverse starts SSH on Remote, listens on Local, uses per-tunnel private key on Remote and scoped local account. Persist intent before mutation; stop only owned resources. Legacy worker and external services remain unchanged.
 
-Installer bootstrap (`install.sh --bootstrap`) uses clean official main checkout only, installs missing Ubuntu prerequisites, preserves existing active SSH/socket activation, validates local root key pair if present. `INSTALL_DEPS=0` must not run apt, systemctl or modify keys; peer onboarding uses this profile.
+Installer bootstrap (`install.sh --bootstrap`) uses clean official main checkout only, installs missing Ubuntu prerequisites, preserves existing active SSH/socket activation, validates local root key pair if present. `INSTALL_DEPS=0` must not run apt, systemctl or modify keys.

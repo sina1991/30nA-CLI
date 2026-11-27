@@ -238,6 +238,12 @@ def remove_main_policy(row):
         raise RuntimeError("Managed sshd policy changed; refusing automatic removal")
 
 
+def reload_sshd():
+    states = command(["systemctl", "is-active", "ssh.service", "ssh.socket"]).splitlines()
+    if states != ["inactive", "active"]:
+        command(["systemctl", "reload", "ssh.service"])
+
+
 def validate_policy(row, peer_ip):
     command([SSHD, "-t"])
     effective = effective_policy(row, peer_ip)
@@ -248,7 +254,7 @@ def validate_policy(row, peer_ip):
                     f"authorizedkeysfile {keys_path(row)}"):
         if setting not in effective:
             raise RuntimeError("Conflicting local sshd policy: " + setting)
-    command(["systemctl", "reload", "ssh.service"])
+    reload_sshd()
 
 
 def state_dir():
@@ -261,7 +267,7 @@ def state_dir():
 
 
 @contextmanager
-def locked(create=False):
+def locked(create=False, kind="reverse"):
     if not create and not (folder() / "two-vps").exists() and not (folder() / "two-vps").is_symlink():
         yield None, {}
         return
@@ -269,7 +275,7 @@ def locked(create=False):
     fd = os.open(directory / "lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     with os.fdopen(fd, "r+b") as stream:
         fcntl.flock(stream, fcntl.LOCK_EX)
-        path = directory / "reverse.json"
+        path = directory / (kind + ".json")
         rows = json.loads(path.read_text()) if path.exists() else {}
         if not isinstance(rows, dict) or len(rows) > MAX_TUNNELS:
             raise RuntimeError("Invalid reverse state")
@@ -333,13 +339,37 @@ def clean_local(row):
                 raise RuntimeError("Local resource ownership changed: " + path.name)
             path.unlink()
     command([SSHD, "-t"])
-    command(["systemctl", "reload", "ssh.service"])
+    reload_sshd()
     try:
         user = pwd.getpwnam(account(row))
     except KeyError:
         return
-    if user.pw_gecos != "30na-reverse-" + row["id"]:
+    if user.pw_uid == 0 or user.pw_gecos != "30na-reverse-" + row["id"]:
         raise RuntimeError("Local account ownership changed")
+    # The account belongs exclusively to this tunnel. Remaining session
+    # processes can outlive its forwarding listener.
+    processes = []
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdecimal():
+            continue
+        try:
+            ids = next(line.split()[1:] for line in (proc / "status").read_text().splitlines()
+                       if line.startswith("Uid:"))
+            if str(user.pw_uid) in ids:
+                processes.append(int(proc.name))
+        except (OSError, StopIteration):
+            continue
+    import signal
+    for pid in processes:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 5
+    while time.monotonic() < deadline:
+        if not any(Path("/proc", str(pid)).exists() for pid in processes):
+            break
+        time.sleep(0.1)
     command(["userdel", account(row)])
 
 
@@ -379,7 +409,7 @@ def start(parameters):
         check_free(row)
         # Verify local server and existing configuration before any change.
         command([SSHD, "-t"])
-        command(["systemctl", "is-active", "ssh.service"])
+        command(["systemctl", "is-active", "ssh.service", "ssh.socket"])
         for resource in (config_path(row), keys_path(row)):
             if resource.exists() or resource.is_symlink():
                 raise RuntimeError("Generated resource collision")
@@ -435,7 +465,7 @@ def list_rows():
         result = []
         for row in rows.values():
             item = row.copy()
-            if item["state"] != "failed":
+            if item["state"] not in ("failed", "stopped"):
                 try:
                     pid = listener(item)
                 except (OSError, RuntimeError):
@@ -456,5 +486,21 @@ def stop(token):
         save(path, rows)
         cleanup(row)
         del rows[token]
+        save(path, rows)
+        return True
+
+def operate(token, operation):
+    if operation == "delete":
+        return stop(token)
+    if not TOKEN.fullmatch(token):
+        return False
+    with locked() as (path, rows):
+        row = rows.get(token)
+        if row is None:
+            return False
+        if row["state"] == "failed":
+            raise RuntimeError("Reverse setup is incomplete; use -delete to clean up")
+        remote(row, {"stop": "pause", "resume": "resume", "restart": "restart"}[operation])
+        row.update(state="stopped" if operation == "stop" else "starting", pid=0)
         save(path, rows)
         return True

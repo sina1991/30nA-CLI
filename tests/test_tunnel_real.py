@@ -16,7 +16,7 @@ import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = str(ROOT / "30na")
+CLI = str(ROOT / "tests" / "fixture_cli.py")
 
 
 def unused_port():
@@ -258,6 +258,7 @@ Host 127.0.0.1 ssh.example.test
             self.cli("-tunnel", "-stop", "-id", token)
 
     def test_numbered_endpoint_real_forward_transfer(self):
+        self.cli("-host", "-add", "-domain", "ssh.example.test")
         with socket.socket() as target:
             local = "127.0.0.2"
             target.bind(("127.0.0.1", 0))

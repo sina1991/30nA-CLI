@@ -17,7 +17,7 @@ import unittest
 from thirtyna.runtime.service import control
 
 ROOT = Path(__file__).resolve().parents[1]
-CLI = str(ROOT / "30na")
+CLI = str(ROOT / "tests" / "fixture_cli.py")
 
 MOCK_SSH = '''#!/usr/bin/env python3
 import json, os, socket, sys, time
@@ -490,7 +490,7 @@ class TunnelTests(unittest.TestCase):
         from unittest.mock import patch
         from thirtyna.agents import tunnel
         self.register()
-        with patch.dict(os.environ, self.env), patch("thirtyna.two_vps.start") as start:
+        with patch.dict(os.environ, self.env), patch("thirtyna.onboarding.enroll"), patch("thirtyna.two_vps.start") as start:
             start.side_effect = lambda p: dict(p, id="a"*24, pid=123, state="ready")
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 tunnel.run(["-reverse", "-localhost", "-id", "1", "-local-port", "5555",
@@ -503,6 +503,7 @@ class TunnelTests(unittest.TestCase):
         self.assertFalse((self.root / "ssh_calls").exists())
 
     def test_modern_direct_alias_and_clean_listing(self):
+        self.register()
         listen = unused_port()
         result = self.cli("-tunnel", "-forward", "-ip", "127.0.0.1", "-listen", str(listen),
                           "-remote-ip/domain", self.host, "-remote-port", "443")
