@@ -51,3 +51,5 @@ Management identity: `thirtyna/ssh_identity.py` validates and copies the operato
 External SSH tunnel discovery: `thirtyna/remote_probe.py`, `thirtyna/tunnel_inventory.py`. Read-only; discovered units remain external. Never claim end-to-end readiness from a unit configuration. See `docs/REMOTE_TUNNEL_ARCHITECTURE.md` for the corrected two-VPS topology and remaining provisioning gates.
 
 Two-VPS reverse engine: `thirtyna/two_vps.py`, `thirtyna/reverse_peer.py`, `tests/test_two_vps.py`. New reverse starts SSH on Remote, listens on Local, uses per-tunnel private key on Remote and scoped local account. Persist intent before mutation; stop only owned resources. Legacy worker and external services remain unchanged.
+
+Installer bootstrap (`install.sh --bootstrap`) uses clean official main checkout only, installs missing Ubuntu prerequisites, preserves existing active SSH/socket activation, validates local root key pair if present. `INSTALL_DEPS=0` must not run apt, systemctl or modify keys; peer onboarding uses this profile.
