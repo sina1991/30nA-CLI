@@ -15,10 +15,12 @@ export PATH="$HOME/.local/bin:$PATH"
 
 ```bash
 clear
-installer=$(mktemp)
-curl -fsSL https://raw.githubusercontent.com/sina1991/30nA-CLI/main/install.sh -o "$installer" &&
-bash "$installer" --bootstrap
-rm -f -- "$installer"
+(
+  installer=$(mktemp) || exit 1
+  trap 'rm -f -- "$installer"' EXIT
+  curl -fsSL https://raw.githubusercontent.com/sina1991/30nA-CLI/main/install.sh -o "$installer" &&
+  bash "$installer" --bootstrap
+)
 ```
 
 با root اجرا شود. دریافت اولیه به curl یا wget و اینترنت نیاز دارد. Bootstrap در /root/30nA-CLI از origin رسمی main دریافت می‌کند یا checkout موجود را فقط با fast-forward به‌روز می‌کند؛ تغییر محلی، branch دیگر یا origin متفاوت باعث توقف می‌شود. سپس نصاب checkout را اجرا می‌کند. نصب از checkout به‌خودی‌خود Git pull انجام نمی‌دهد.

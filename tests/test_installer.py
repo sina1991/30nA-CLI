@@ -74,3 +74,57 @@ main
 """, env=dict(os.environ, INSTALL_DEPS="0", PREFIX=tmp))
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertTrue((Path(tmp) / "bin/30na").is_symlink())
+
+    def test_active_ssh_socket_preserved(self):
+        result = self.shell("""
+check_sshd() { echo CHECK; }
+systemctl() {
+    printf 'SYSTEMCTL %s\\n' "$*"
+    case "$*" in
+        'is-active --quiet ssh.socket'|'is-enabled --quiet ssh.socket') return 0 ;;
+        *) return 1 ;;
+    esac
+}
+prepare_ssh
+""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("CHECK", result.stdout)
+        self.assertNotIn("enable --now", result.stdout)
+        self.assertNotIn("restart", result.stdout.replace("not restarted", ""))
+
+    def test_inactive_ssh_service_enabled_and_started(self):
+        result = self.shell("""
+check_sshd() { echo CHECK; }
+started=0
+systemctl() {
+    printf 'SYSTEMCTL %s\\n' "$*"
+    case "$*" in
+        'is-active --quiet ssh.socket') return 1 ;;
+        'is-active --quiet ssh.service') [[ $started == 1 ]] ;;
+        'enable --now ssh.service') started=1 ;;
+        *) return 1 ;;
+    esac
+}
+prepare_ssh
+""")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("SYSTEMCTL enable --now ssh.service", result.stdout)
+
+    def test_dirty_checkout_not_updated(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            checkout = Path(tmp) / "checkout"
+            (checkout / ".git").mkdir(parents=True)
+            result = self.shell("""
+git() {
+    case "$*" in
+        *'remote get-url origin') echo https://github.com/sina1991/30nA-CLI.git ;;
+        *'branch --show-current') echo main ;;
+        *'status --porcelain') echo ' M install.sh' ;;
+        *) echo UNEXPECTED; return 99 ;;
+    esac
+}
+bootstrap_checkout "$CHECKOUT"
+""", env=dict(os.environ, CHECKOUT=str(checkout)))
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("local changes", result.stderr)
+            self.assertNotIn("UNEXPECTED", result.stdout)

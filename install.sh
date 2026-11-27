@@ -50,9 +50,15 @@ apt_prepare() {
     fi
 }
 
+check_sshd() {
+    # Fresh installs may not have created the volatile privsep directory yet.
+    [[ -d /run/sshd ]] || install -d -m 0755 /run/sshd
+    /usr/sbin/sshd -t
+}
+
 prepare_ssh() {
     command -v systemctl >/dev/null || fail "systemd is required for the SSH server."
-    /usr/sbin/sshd -t
+    check_sshd
     # Preserve Ubuntu's socket activation and existing active SSH sessions.
     if systemctl is-active --quiet ssh.socket; then
         systemctl is-enabled --quiet ssh.socket || systemctl enable ssh.socket
