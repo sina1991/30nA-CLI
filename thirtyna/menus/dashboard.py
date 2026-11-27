@@ -159,7 +159,7 @@ def invoke(args, interactive=False, timeout=15):
         timeout = max(timeout, 60)
     enrollment = args[:2] == ["-host", "-add"] and "-onboard" in args
     if enrollment:
-        timeout = max(timeout, 260)
+        timeout = max(timeout, 450 if interactive else 180)
     try:
         if interactive and not enrollment:
             return Result(subprocess.run(argv).returncode,
