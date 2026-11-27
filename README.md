@@ -25,8 +25,18 @@ clear
 
 ## Menu Agent
 
+منوی مرکزی تمام ایجنت‌ها با TUI و Status Bar:
+
+```bash
+clear
+30na -menu -tui
+```
+
+[راهنمای مرکز کنترل و میانبرها](docs/TUI_GUIDE.md)
+
 | دستور | رابط |
 |---|---|
+| `30na -menu -tui` | مرکز کنترل همه ایجنت‌ها |
 | `30na -menu` | فهرست منوها با انتخاب شماره |
 | `30na -menu -dir /var` | پیمایش مستقیم با شماره |
 | `30na -menu -dir /var -tui` | فلش و Enter در ترمینال |

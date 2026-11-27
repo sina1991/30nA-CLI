@@ -70,3 +70,12 @@ clear
 ```
 
 دامنه نمونه را با دامنه سرور مجاز خود جایگزین کنید. ثبت دامنه، IPهای حاصل از DNS را جداگانه مجاز نمی‌کند و برعکس. User و Port و کلید SSH از تنظیمات OpenSSH خوانده می‌شوند؛ عبارت user@domain را به‌عنوان مقدار -domain وارد نکنید. گزینه -target همچنان IP عددی می‌پذیرد. Listenerهای Tunnel Agent همچنان Loopback هستند. برای استفاده در Systemd و تفاوت Listener عمومی، [راهنمای اتصال دامنه](DOMAIN_SSH_GUIDE.md) را بخوانید. پیش از استفاده از قابلیت جدید Service Agent قدیمی را مطابق راهنمای نصب متوقف و نسخه جدید را نصب کنید.
+
+## مرکز کنترل TUI
+
+```bash
+clear
+30na -menu -tui
+```
+
+برای دسترسی به Calculator، System، Host، Tunnel، Files و Help از [راهنمای مرکز کنترل](TUI_GUIDE.md) استفاده کنید.
