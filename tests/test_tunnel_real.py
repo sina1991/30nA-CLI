@@ -331,3 +331,41 @@ Host 127.0.0.1 ssh.example.test
         for setting in ("allowtcpforwarding remote", "gatewayports clientspecified",
                         "maxsessions 0", "permitlisten 127.0.0.1:5555", "permitopen none"):
             self.assertIn(setting, result.stdout.splitlines())
+
+    def test_numbered_forward_uses_imported_management_key_without_identityfile(self):
+        # Simulate a freshly enrolled controller: SSH config specifies
+        # transport/known_hosts only, and the sole authorized key is managed.
+        import shutil
+        self.shutdown()
+        home = self.root / "fresh_home"
+        directory = home / ".ssh" / "30na-management"
+        directory.mkdir(parents=True, mode=0o700)
+        (home / ".ssh").chmod(0o700)
+        key = directory / "identity"
+        shutil.copyfile(self.root / "client_key", key)
+        shutil.copyfile(self.root / "client_key.pub", key.with_suffix(".pub"))
+        key.chmod(0o600)
+        key.with_suffix(".pub").chmod(0o600)
+        self.config.write_text("\n".join(line for line in self.config.read_text().splitlines()
+                                        if not line.strip().startswith("IdentityFile ")) + "\n")
+        self.env["HOME"] = str(home)
+        self.cli("-host", "-add", "-domain", "ssh.example.test")
+        with socket.socket() as target:
+            target.bind(("127.0.0.1", 0))
+            target.listen()
+            target.settimeout(4)
+            listen = unused_port()
+            result = self.cli("-tunnel", "-forward", "-ip", "127.0.0.1",
+                              "-local-port", str(listen), "-remote-domain", "ssh.example.test",
+                              "-remote-port", str(target.getsockname()[1]))
+            token = result.stdout.split()[0].split("=")[1]
+            self.wait_state(token, "ready")
+            with socket.create_connection(("127.0.0.1", listen), timeout=4) as client:
+                client.sendall(b"managed")
+                peer, _ = target.accept()
+                with peer:
+                    peer.settimeout(4)
+                    self.assertEqual(peer.recv(7, socket.MSG_WAITALL), b"managed")
+                    peer.sendall(b"ok")
+                    self.assertEqual(client.recv(2, socket.MSG_WAITALL), b"ok")
+            self.cli("-tunnel", "-stop", "-id", token)
