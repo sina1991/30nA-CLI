@@ -103,3 +103,15 @@ clear
 ```
 
 بدون ثبت Host، آدرس‌های Interface محلی را نمایش می‌دهد. برای تشخیص IP عمومی پشت NAT از این خروجی نتیجه‌گیری نکنید.
+
+## Port Agent
+
+```bash
+clear
+30na -port -list
+30na -port -all
+30na -port -summary
+30na -port -check 5555
+```
+
+[راهنمای Port Agent](PORT_AGENT_GUIDE.md).

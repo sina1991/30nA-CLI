@@ -87,3 +87,5 @@ clear
 [راهنمای Domain Name و SSH Service](docs/DOMAIN_SSH_GUIDE.md)
 
 [راهنمای Systemd Service Agent](docs/SYSTEMD_SERVICE_GUIDE.md) · [Dashboard چندپنلی](docs/TUI_GUIDE.md)
+
+[راهنمای Port Agent](docs/PORT_AGENT_GUIDE.md)

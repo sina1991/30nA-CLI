@@ -41,3 +41,5 @@ For TUI control-center changes, read `docs/TUI_GUIDE.md`, `thirtyna/menus/dashbo
 For systemd operations use `thirtyna/agents/systemctl.py`, `docs/SYSTEMD_SERVICE_GUIDE.md`, `tests/test_systemctl.py`. This public agent is distinct from the internal supervisor. Never escalate automatically or mutate real services in tests. Dashboard regions live in `thirtyna/menus/panels.py`.
 
 Local IP discovery: `thirtyna/agents/sysinfo.py` (`-sys -ip`) uses local interface information, not Host registration or external DNS. Target pickers must not require saved hosts to show local addresses.
+
+Public Port Inspection Agent: `thirtyna/agents/port.py`, `tests/test_port.py`, `docs/PORT_AGENT_GUIDE.md`. Distinct from runtime allocator; inspect only, never kill a foreign listener. Owner/unit unknown when unavailable.

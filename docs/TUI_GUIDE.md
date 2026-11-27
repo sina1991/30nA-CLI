@@ -59,3 +59,7 @@ clear
 ## IP خود سرور
 
 System Agent با گزینه -ip آدرس‌های Interface محلی را از hostname -I می‌خواند، بدون DNS یا ثبت Host. Header و Overview این آدرس‌ها را نشان می‌دهند. در Target IP، کلید f همین IPها و Loopback را ارائه می‌کند؛ ورود دستی نیز ممکن است. در Forward، مقصد از سمت سرور SSH قابل دسترسی است؛ در Reverse، مقصد از سمت سرور محلی. IP مشاهده‌شده ممکن است خصوصی یا پشت NAT باشد و الزاماً Public IP نیست. ثبت مقصد SSH همچنان جداگانه لازم است.
+
+## Ports
+
+منوی 8 (Ports) فهرست TCP/UDP، همه Socketها، بررسی یک شماره و تعداد پورت‌ها را نمایش می‌دهد. Status Bar دارای Ports T/U (TCP/UDP) است و پنل وضعیت شماره و Unit مشاهده‌شده را نشان می‌دهد. [راهنمای Port Agent](PORT_AGENT_GUIDE.md).
