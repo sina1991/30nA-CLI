@@ -41,7 +41,7 @@ def config_for(link, port):
     if not uri.hostname or not uri.port or not uri.username:
         raise ValueError("INVALID_LINK")
     network = value("type", "tcp").lower()
-    if network not in ("tcp", "raw", "ws", "grpc"):
+    if network not in ("tcp", "raw", "ws", "grpc", "xhttp"):
         raise ValueError("UNSUPPORTED_TRANSPORT")
     if value("headerType", "none") not in ("", "none"):
         raise ValueError("UNSUPPORTED_HEADER")
@@ -60,6 +60,13 @@ def config_for(link, port):
                                       multiMode=value("mode") == "multi")
         if value("authority", value("host")):
             stream["grpcSettings"]["authority"] = value("authority", value("host"))
+    if network == "xhttp":
+        mode = value("mode", "auto")
+        if mode not in ("auto", "packet-up", "stream-up", "stream-one") or value("extra"):
+            raise ValueError("UNSUPPORTED_TRANSPORT")
+        stream["xhttpSettings"] = dict(path=value("path", "/"), mode=mode)
+        if value("host"):
+            stream["xhttpSettings"]["host"] = value("host")
     if security == "reality":
         if not value("pbk") or not value("sni"):
             raise ValueError("MISSING_REALITY_PARAMETER")
