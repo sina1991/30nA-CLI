@@ -46,6 +46,22 @@ class HistoryTests(unittest.TestCase):
             self.assertEqual(history.catalog(path, 25000000, now=10100)["lists"],
                              {"1": [], "2": [], "3": []})
 
+    def test_recovered_profile_returns_to_recommended(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "history.sqlite"
+            for index in range(3):
+                self.record(path, "failed-" + str(index), LINK, 0, 10000 + index)
+            failed = history.catalog(path, 10000000, now=10100)
+            self.assertEqual(len(failed["lists"]["3"]), 1)
+            later = 10000 + 25 * 3600
+            for index in range(3):
+                self.record(path, "recovered-" + str(index), LINK, 3, later + index)
+            recovered = history.catalog(path, 10000000, now=later + 100)
+            self.assertEqual(len(recovered["lists"]["1"]), 1)
+            entry = recovered["lists"]["1"][0]
+            self.assertEqual(entry["windows"]["24h"]["success_rate"], 1)
+            self.assertEqual(entry["windows"]["7d"]["success_rate"], 0.5)
+
     def test_policy_validation(self):
         with tempfile.TemporaryDirectory() as temp:
             for policy in ({"good_success": "bad"}, dict(history.DEFAULT_POLICY, failure_margin=2)):
