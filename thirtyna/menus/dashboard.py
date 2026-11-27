@@ -100,7 +100,7 @@ CATALOG = (
         ("All agents", ("-help",)), ("Calculator help", ("-calc", "-help")),
         ("System help", ("-sys", "-help")), ("Host help", ("-host", "-help")),
         ("Tunnel help", ("-tunnel", "-help")), ("Menu help", ("-menu", "-help")),
-        ("Service help", ("-service", "-help"))))),
+        ("Service help", ("-service", "-help")), ("Port help", ("-port", "-help"))))),
     ("Services", tuple(Action(title, ("-service", "-" + op)) for title, op in (
         ("Active services", "active"), ("All loaded services", "list"),
         ("Installed unit files", "installed"), ("30nA worker status", "workers")))
@@ -109,6 +109,15 @@ CATALOG = (
                     hint="Uses system scope; requires existing permissions.")
              for op in ("status", "start", "stop", "restart", "reload", "enable", "disable", "logs"))
      + (Action("Reload systemd manager", ("-service", "-daemon-reload"), confirm=True),)),
+    ("Ports", (
+        Action("Listening TCP / bound UDP", ("-port", "-list")),
+        Action("All TCP/UDP sockets", ("-port", "-all")),
+        Action("TCP listeners", ("-port", "-list", "-tcp")),
+        Action("UDP bound sockets", ("-port", "-list", "-udp")),
+        Action("Port counts", ("-port", "-summary")),
+        Action("Inspect port number", ("-port", "-check", 0),
+               (Field("Port number", "5555", "listen"),)),
+    )),
 )
 
 
@@ -153,10 +162,15 @@ class Snapshot:
         self.system = []
         self.local_ips = None
         self.services = None
+        self.ports = None
+        self.port_rows = None
         self.workers = None
         self.overview_time = None
 
     def invalidate(self, args):
+        if args and (args[0] == "-tunnel" and "-list" not in args or
+                     args[0] == "-service" and args[1] not in ("-list", "-active", "-installed", "-workers", "-status", "-logs", "-help")):
+            self.ports = self.port_rows = None
         if args and args[0] == "-host" and "-list" not in args:
             self.hosts = self.host_time = None
             self.host_rows = []
@@ -187,6 +201,24 @@ class Snapshot:
                 self.tunnels = counts
                 self.tunnel_rows = result.stdout.splitlines()
                 self.tunnel_time = time.strftime("%H:%M:%S")
+        elif args == ["-port", "-list"]:
+            self.ports = self.port_rows = None
+            if result.code == 0 and not result.truncated:
+                rows = result.stdout.splitlines()
+                counts = {"tcp": set(), "udp": set()}
+                for line in rows:
+                    words = line.split()
+                    if len(words) < 6 or words[0] not in counts or not words[3].startswith("port="):
+                        return
+                    try:
+                        number = int(words[3][5:])
+                    except ValueError:
+                        return
+                    if not 1 <= number <= 65535:
+                        return
+                    counts[words[0]].add(number)
+                self.port_rows = rows
+                self.ports = {proto: len(numbers) for proto, numbers in counts.items()}
         elif args == ["-service", "-active"]:
             self.services = None
             if result.code == 0 and not result.truncated:
@@ -209,10 +241,12 @@ class Snapshot:
         hosts = "?" if self.hosts is None else str(self.hosts)
         t = self.tunnels
         tunnels = "?/?/?" if t is None else f'{t["ready"]}/{t["starting"]}/{t["failed"]}'
+        p = self.ports
+        ports = "?/?" if p is None else f'{p["tcp"]}/{p["udp"]}'
         if compact:
-            return f"H {hosts} | R/S/F {tunnels}"
+            return f"H {hosts} | R/S/F {tunnels} | P {ports}"
         ht, tt = self.host_time or "--", self.tunnel_time or "--"
-        return f"Hosts {hosts} | Tunnels R/S/F {tunnels} | H {ht} T {tt}"
+        return f"Hosts {hosts} | Tunnels R/S/F {tunnels} | Ports T/U {ports} | H {ht} T {tt}"
 
 
 class Dashboard:
@@ -379,7 +413,7 @@ class Dashboard:
         self.draw(h-3, 0, " STATUS | " + self.status + " | " + self.detail,
                   self.status_styles.get(self.status.split()[0], self.active), True)
         keys = self.keys()
-        legend = " Snapshot: R ready / S starting / F failed; ? unknown"
+        legend = " R/S/F: ready/starting/failed | T/U: TCP/UDP port numbers | ? unknown"
         if w < 55:
             if self.editing:
                 keys = "Enter save | Esc cancel"
@@ -393,7 +427,7 @@ class Dashboard:
                 keys = "j/k Enter f:pick Esc"
             else:
                 keys = "j/k Enter r v:view q"
-            legend = "H:hosts R/S/F snapshot"
+            legend = "H:hosts P:TCP/UDP ports"
         self.draw(h-2, 0, keys, self.accent, True)
         self.draw(h-1, 0, legend + " | v Overview | " + (self.snapshot.overview_time or "--"), self.normal, True)
         s.refresh()
@@ -438,6 +472,14 @@ class Dashboard:
                 if len(words) >= 5:
                     state = next((v[6:] for v in words if v.startswith("state=")), "?")
                     rows.append(f"{words[3]} {state} {words[2]}")
+        rows += ["PORTS TCP/UDP"]
+        if snap.ports is None:
+            rows += ["Unknown"]
+        else:
+            rows += [f'{snap.ports["tcp"]}/{snap.ports["udp"]} distinct ports']
+            for line in snap.port_rows:
+                words = line.split()
+                rows.append(f"{words[0]} {words[3][5:]} {words[4][5:]}")
         rows += ["SERVICE NAMES"]
         rows += snap.services if snap.services else (["None"] if snap.services == [] else [])
         return rows
@@ -453,7 +495,7 @@ class Dashboard:
                 "Registered host does not mean connected. Use agent lists for full details."]
 
     def refresh_overview(self):
-        for args in (["-sys", *("-" + f for f in SYSTEM)], ["-sys", "-ip"], ["-service", "-active"], ["-service", "-workers"]):
+        for args in (["-sys", *("-" + f for f in SYSTEM)], ["-sys", "-ip"], ["-service", "-active"], ["-service", "-workers"], ["-port", "-list"]):
             self.snapshot.observe(args, self.runner(args))
         self.snapshot.overview_time = time.strftime("%H:%M:%S")
         self.side_scroll = 0
@@ -472,7 +514,7 @@ class Dashboard:
             self.status = "ERROR refresh"
             self.detail = "Counts incomplete; open agent list for details"
         else:
-            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.workers is None else "Counts refreshed")
+            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.workers is None or self.snapshot.ports is None else "Counts refreshed")
 
     def open_picker(self):
         field = self.action.fields[self.index]
@@ -639,7 +681,7 @@ class Dashboard:
             self.index = (self.index-1) % count
         elif key in (c.KEY_DOWN, "j", "\t"):
             self.index = (self.index+1) % count
-        elif self.page == "home" and isinstance(key, str) and key in "1234567":
+        elif self.page == "home" and isinstance(key, str) and key in "12345678":
             self.category, self.page, self.index = int(key)-1, "actions", 0
         elif enter:
             if self.page == "home":

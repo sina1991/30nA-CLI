@@ -10,6 +10,7 @@ HELP = {
     "Tunnel": "Forward/reverse SSH. Register host first. f opens choices on every field.",
     "Files": "Browse, copy, move and edit files in the two-pane manager.",
     "Help": "Open exact CLI help for any public agent.",
+    "Ports": "Inspect local TCP/UDP ports, sockets, process owners and observed systemd units. No process termination.",
     "Services": "Systemd: list units, status, logs, start/stop/restart, enable/disable. Changes require confirmation.",
 }
 

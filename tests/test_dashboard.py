@@ -56,6 +56,8 @@ class DashboardTests(unittest.TestCase):
             return Result(0, "\n".join(self.hosts) + "\n")
         if args == ["-tunnel", "-list"]:
             return Result(0, self.listing)
+        if args == ["-port", "-list"]:
+            return Result(0, "tcp LISTEN 127.0.0.1 port=22 unit=ssh.service owner=?\ntcp LISTEN [::] port=22 unit=ssh.service owner=?\nudp UNCONN 0.0.0.0 port=53 unit=? owner=?\n")
         if args == ["-service", "-active"]:
             return Result(0, "ssh.service loaded active running SSH\n")
         if args == ["-service", "-workers"]:
@@ -109,13 +111,14 @@ class DashboardTests(unittest.TestCase):
 
     def test_catalog_covers_public_operations(self):
         self.assertEqual([name for name, _ in CATALOG],
-                         ["Calculator", "System", "Host", "Tunnel", "Files", "Help", "Services"])
+                         ["Calculator", "System", "Host", "Tunnel", "Files", "Help", "Services", "Ports"])
         actions = dict(CATALOG)
         self.assertEqual(len(actions["Calculator"]), 5)
         self.assertEqual(len(actions["System"]), 9)
         self.assertEqual(len(actions["Host"]), 5)
         self.assertEqual(len(actions["Tunnel"]), 4)
-        self.assertEqual(len(actions["Help"]), 7)
+        self.assertEqual(len(actions["Help"]), 8)
+        self.assertEqual(len(actions["Ports"]), 6)
         self.assertEqual(len(actions["Services"]), 13)
         self.assertEqual(actions["Calculator"][4].command(["8", "2"]),
                          ["-calc", "-add", "8", "2", "-sub", "8", "2",
@@ -246,6 +249,24 @@ class DashboardTests(unittest.TestCase):
         self.ui.set_result(["-tunnel", "-reverse"], Result(1, stderr="30na: SSH tunnel failed: host_key_failed"))
         self.assertTrue(any("verify the SSH server fingerprint" in line for line in self.ui.output))
         self.assertTrue(any("Do not disable" in line for line in self.ui.output))
+
+    def test_ports_status_and_picker(self):
+        self.keys("r")
+        self.assertEqual(self.ui.snapshot.ports, {"tcp": 1, "udp": 1})
+        self.ui.render()
+        self.assertIn("Ports T/U 1/1", self.screen.lines[20])
+        self.assertIn("tcp 22 ssh.service", self.ui.side_lines())
+        self.keys("8", "k", "\n", "f", "\n", "j", "\n")
+        self.assertEqual(self.calls[-1], (["-port", "-check", "5555"], False))
+
+    def test_port_snapshot_unknown_on_failure(self):
+        snap = Snapshot()
+        snap.observe(["-port", "-list"], Result(0, "garbled"))
+        self.assertIsNone(snap.ports)
+        snap.observe(["-port", "-list"], Result(0, ""))
+        self.assertEqual(snap.ports, {"tcp": 0, "udp": 0})
+        snap.observe(["-port", "-list"], Result(1, stderr="ss failed"))
+        self.assertIsNone(snap.ports)
 
     def test_snapshot_does_not_invent_counts(self):
         snapshot = Snapshot()
