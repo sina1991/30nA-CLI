@@ -140,12 +140,27 @@ def controller_revision():
 
 
 def ssh_options(key, interactive=False):
-    return [*identity_options(key), "-o", "BatchMode=" + ("no" if interactive else "yes"),
+    return [*identity_options(key), "-o", "IdentityAgent=none", "-o", "CertificateFile=none", "-o", "BatchMode=" + ("no" if interactive else "yes"),
             "-o", "PreferredAuthentications=" + ("publickey,password,keyboard-interactive" if interactive else "publickey"),
             "-o", "StrictHostKeyChecking=" + ("ask" if interactive else "yes"),
             "-o", "NumberOfPasswordPrompts=3", "-o", "ConnectTimeout=8",
             "-o", "ClearAllForwardings=yes", "-o", "ControlMaster=no",
             "-o", "ControlPath=none", "-o", "PermitLocalCommand=no"]
+
+
+def verify_identity_config(address, key):
+    result = subprocess.run(["ssh", "-G", *ssh_options(key), "--", address],
+                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=8)
+    if result.returncode:
+        raise RuntimeError("Cannot verify SSH configuration")
+    identities = [line.partition(" ")[2] for line in result.stdout.splitlines()
+                  if line.startswith("identityfile ")]
+    if not identities or any(Path(os.path.expanduser(name)) != key for name in identities):
+        raise RuntimeError("SSH config includes another IdentityFile; use a host entry with only the 30nA management identity")
+    certificates = [line.partition(" ")[2] for line in result.stdout.splitlines()
+                    if line.startswith("certificatefile ")]
+    if any(name != "none" for name in certificates):
+        raise RuntimeError("SSH config includes another certificate identity")
 
 
 def distinct_probe(address, key, controller, interactive=False):
@@ -164,6 +179,7 @@ def distinct_probe(address, key, controller, interactive=False):
 
 
 def authenticate(address, key, controller, interactive):
+    verify_identity_config(address, key)
     if distinct_probe(address, key, controller):
         return
     if not interactive:
@@ -178,6 +194,8 @@ def authenticate(address, key, controller, interactive):
     # ssh-copy-id accepts -i and -o, not ssh's standalone -T.
     # The public file supplied to -i also selects its matching local private key.
     options = options[2:]
+    # Force the exact public key to be tested by ssh-copy-id even if an
+    # unrelated SSH agent is available. Native password prompts stay on TTY.
     result = subprocess.run(["ssh-copy-id", "-i", str(key.with_suffix(".pub")),
                              *options, address], timeout=120)
     if result.returncode:

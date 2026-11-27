@@ -75,3 +75,5 @@ Local فیروزه‌ای، Remote ارغوانی؛ Tunnel Ready سبز، Starti
 ## Host Onboarding
 
 در Host، دو گزینه Add / update host برای Key و Password/Key+Password وجود دارد. گزینه دوم موقتاً curses را ترک می‌کند تا OpenSSH رمز را در Prompt بگیرد و سپس گزارش را در TUI نمایش دهد. Register address only ثبت آفلاین است. [راهنما](HOST_ONBOARDING.md).
+
+در Onboarding، ابتدا کلیدهای مدیریت محلی بررسی می‌شوند؛ در گزینه Password، در صورت نیاز ssh-copy-id فقط کلید عمومی را ثبت می‌کند. [راهنما](HOST_ONBOARDING.md).
