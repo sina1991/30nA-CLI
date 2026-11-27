@@ -289,21 +289,23 @@ class Dashboard:
             half = w//2
             self.draw(1, 1, "SYSTEM / " + sysinfo.get("hostname", "?"), self.accent, limit=half-2)
             self.draw(1, half+1, "CONTEXT HELP / " + focused, self.accent, limit=w-half-2)
-            info = [sysinfo.get("os", "OS ?") + " | Kernel " + sysinfo.get("kernel", "?"),
-                    "CPU " + sysinfo.get("cpu", "?") + " | " + sysinfo.get("ram", "RAM ?"),
-                    "Uptime " + sysinfo.get("uptime", "?") + " | Disk " + sysinfo.get("disk", "?")]
+            info = ["OS " + sysinfo.get("os", "?"),
+                    "Kernel " + sysinfo.get("kernel", "?") + " | Up " + sysinfo.get("uptime", "?"),
+                    "CPU " + sysinfo.get("cpu", "?"),
+                    "RAM " + sysinfo.get("ram", "?"),
+                    "Disk " + sysinfo.get("disk", "?")]
             for i, line in enumerate(info, 2):
                 self.draw(i, 1, line, limit=half-2)
-            for i, line in enumerate(textwrap.wrap(context, max(1, w-half-3))[:3], 2):
+            for i, line in enumerate(textwrap.wrap(context, max(1, w-half-3))[:5], 2):
                 self.draw(i, half+1, line, limit=w-half-2)
-            for y in range(1, 5):
+            for y in range(1, region.top-1):
                 self.draw(y, half, "|", self.accent, limit=1)
-            self.draw(5, 1, "AGENTS", self.accent, limit=region.left-2)
-            self.draw(5, region.right, "OBSERVED STATUS", self.accent, limit=w-region.right-1)
-            for i, (name, _) in enumerate(CATALOG):
-                if i >= region.body:
-                    break
-                self.draw(region.top+i, 1, f"{i+1}. {name}",
+            self.draw(region.top-1, 1, "AGENTS", self.accent, limit=region.left-2)
+            self.draw(region.top-1, region.right, "OBSERVED STATUS", self.accent, limit=w-region.right-1)
+            focus_index = self.index if self.page == "home" else self.category
+            first_agent = max(0, focus_index-region.body+1)
+            for i, (name, _) in enumerate(CATALOG[first_agent:first_agent+region.body], first_agent):
+                self.draw(region.top+i-first_agent, 1, f"{i+1}. {name}",
                           self.active if name == focused else self.normal,
                           fill=name == focused, limit=region.left-2)
             side = self.side_lines()
@@ -393,6 +395,8 @@ class Dashboard:
 
     def set_result(self, args, result):
         self.snapshot.observe(args, result)
+        if args and args[0] in ("-host", "-tunnel"):
+            self.snapshot.workers = None
         self.status = ("OK" if result.code == 0 else "ERROR") + f" exit={result.code}"
         self.detail = ("Review output (stderr)" if result.stderr else "Command completed") if result.code == 0 else "Review output"
         self.output = ["$ 30na " + shlex.join(args), ""]
@@ -405,11 +409,16 @@ class Dashboard:
             self.output.append("(No output)")
         if args == ["-tunnel", "-list"]:
             self.output.append("Exit 0 means list succeeded, not all tunnels are ready.")
+        if args and args[0] == "-tunnel" and "host_key_failed" in result.stderr + result.stdout:
+            self.output.extend(["", "HOST KEY: verify the SSH server fingerprint using a trusted source.",
+                                "Open Host > Connect SSH for the registered endpoint (same user/config).",
+                                "Do not disable host-key verification or blindly remove known_hosts entries.",
+                                "Retry the tunnel after verified noninteractive SSH works."])
         self.page, self.scroll = "result", 0
 
     def side_lines(self):
         snap = self.snapshot
-        rows = ["WORKERS"]
+        rows = ["ACTIVE SERVICES: " + ("?" if snap.services is None else str(len(snap.services))), "WORKERS"]
         rows += ([f"{name}: {snap.workers[name]}" for name in ("supervisor", "port", "host", "tunnel")]
                  if snap.workers else ["Unknown"])
         rows += ["HOSTS: " + ("?" if snap.hosts is None else str(snap.hosts))]
@@ -424,7 +433,7 @@ class Dashboard:
                 if len(words) >= 5:
                     state = next((v[6:] for v in words if v.startswith("state=")), "?")
                     rows.append(f"{words[3]} {state} {words[2]}")
-        rows += ["ACTIVE SERVICES: " + ("?" if snap.services is None else str(len(snap.services)))]
+        rows += ["SERVICE NAMES"]
         rows += snap.services if snap.services else (["None"] if snap.services == [] else [])
         return rows
 
@@ -454,7 +463,7 @@ class Dashboard:
             self.status = "ERROR refresh"
             self.detail = "Counts incomplete; open agent list for details"
         else:
-            self.status, self.detail = "OK", "Counts refreshed"
+            self.status, self.detail = "OK", ("Counts refreshed; overview incomplete" if self.snapshot.services is None or self.snapshot.workers is None else "Counts refreshed")
 
     def open_picker(self):
         field = self.action.fields[self.index]
@@ -610,9 +619,9 @@ class Dashboard:
             elif key in (c.KEY_DOWN, "j"):
                 self.scroll += 1
             elif key == c.KEY_PPAGE:
-                self.scroll = max(0, self.scroll-max(1, h-6))
+                self.scroll = max(0, self.scroll-layout(h, w).body)
             elif key == c.KEY_NPAGE:
-                self.scroll += max(1, h-6)
+                self.scroll += layout(h, w).body
             return True
         count = (len(CATALOG) if self.page == "home" else
                  len(CATALOG[self.category][1]) if self.page == "actions" else
@@ -662,6 +671,11 @@ class Dashboard:
             pass
         self.render()
         self.refresh_overview()
+        # Do not bootstrap stopped runtime workers merely to draw the dashboard.
+        for name in ("host", "tunnel"):
+            if self.snapshot.workers and self.snapshot.workers.get(name) == "ready":
+                args = ["-" + name, "-list"]
+                self.snapshot.observe(args, self.runner(args))
         while True:
             self.render()
             if not self.handle(self.screen.get_wch()):

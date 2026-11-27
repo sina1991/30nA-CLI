@@ -25,6 +25,9 @@ def worker_status():
             info = control("status", name, bootstrap=False)
         except (OSError, ValueError, RuntimeError):
             print(name + " unknown")
+            if name == "host":
+                print("supervisor unknown")
+                print("port unknown")
             continue
         state = info.get("state")
         print(name + " " + (state if state in ("ready", "down") else "unknown"))
@@ -54,7 +57,7 @@ def run(argv):
         return 0
 
     env = dict(os.environ, LC_ALL="C", SYSTEMD_COLORS="0", SYSTEMD_PAGER="cat")
-    cmd = ["systemctl", "--no-pager", "--no-ask-password"]
+    cmd = ["systemctl", "--no-pager", "--no-ask-password", "--full"]
     if op in ("list", "active"):
         cmd += ["list-units", "--type=service", "--no-legend", "--plain",
                 "--all" if op == "list" else "--state=active"]

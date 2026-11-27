@@ -36,9 +36,9 @@ class Layout:
 
 def layout(height, width):
     # Reserve the four footer lines at every size.
-    if height >= 16 and width >= 100:
+    if height >= 18 and width >= 100:
         left, right = 21, width - 27
-        return Layout(6, left, right-left-1, right, height-10, True)
+        return Layout(8, left, right-left-1, right, height-12, True)
     if height >= 12:
         return Layout(4, 1, width-2, 0, height-8, False)
     return Layout(2, 1, width-2, 0, height-6, False)
