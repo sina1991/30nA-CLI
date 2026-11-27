@@ -18,6 +18,7 @@ LIMIT = 65536
 class Field:
     name: str
     default: str = ""
+    picker: str = ""
 
 
 @dataclass(frozen=True)
@@ -54,7 +55,7 @@ def tunnel(mode):
     return Action(mode.capitalize() + " tunnel",
                   ("-tunnel", "-" + mode, "-domain", 0, "-listen", 1,
                    "-target", 2, "-target-port", 3, "@restore"),
-                  (Field("Registered IP or domain"), Field("Listen port", "5555"),
+                  (Field("Registered IP or domain", picker="host"), Field("Listen port", "5555"),
                    Field("Target IP", "127.0.0.1"), Field("Target port", "443"),
                    Field("Restore (yes/no)", "no")),
                   hint="Loopback listener; register the SSH host first.")
@@ -77,18 +78,18 @@ CATALOG = (
         Action("Register IP or domain", ("-host", "-add", "-domain", 0),
                (Field("IP or domain"),)),
         Action("Connect SSH", ("-host", "-ssh", "-domain", 0),
-               (Field("Registered IP or domain"),), interactive=True,
+               (Field("Registered IP or domain", picker="host"),), interactive=True,
                hint="Uses your SSH configuration. Exit SSH to return."),
         Action("Register and connect", ("-host", "-add", "-domain", 0, "-ssh"),
                (Field("IP or domain"),), interactive=True),
         Action("Remove host", ("-host", "-remove", "-domain", 0),
-               (Field("IP or domain"),), confirm=True),
+               (Field("IP or domain", picker="host"),), confirm=True),
     )),
     ("Tunnel", (
         Action("List tunnels", ("-tunnel", "-list")),
         tunnel("forward"), tunnel("reverse"),
         Action("Stop tunnel / clear failed entry", ("-tunnel", "-stop", "-id", 0),
-               (Field("Tunnel ID"),), confirm=True),
+               (Field("Tunnel ID", picker="tunnel"),), confirm=True),
     )),
     ("Files", (
         Action("Open current directory", ("@files",)),
@@ -162,10 +163,12 @@ class Snapshot:
                 self.tunnels = counts
                 self.tunnel_time = time.strftime("%H:%M:%S")
 
-    def summary(self):
+    def summary(self, compact=False):
         hosts = "?" if self.hosts is None else str(self.hosts)
         t = self.tunnels
         tunnels = "?/?/?" if t is None else f'{t["ready"]}/{t["starting"]}/{t["failed"]}'
+        if compact:
+            return f"H {hosts} | R/S/F {tunnels}"
         ht, tt = self.host_time or "--", self.tunnel_time or "--"
         return f"Hosts {hosts} | Tunnels R/S/F {tunnels} | H {ht} T {tt}"
 
@@ -184,6 +187,8 @@ class Dashboard:
         self.editing = False
         self.buffer = ""
         self.confirming = False
+        self.choices = []
+        self.choice_index = 0
         self.status = "READY"
         self.detail = "Choose an agent. r refreshes counts."
         self.output = []
@@ -207,10 +212,12 @@ class Dashboard:
             return "Enter save | Esc cancel | Backspace | Ctrl+U erase"
         if self.confirming:
             return "y confirm | n / Esc cancel"
+        if self.page == "picker":
+            return "Up/Down or j/k | Enter select | Esc cancel"
         if self.page == "result":
             return "Up/Down scroll | PgUp/PgDn | Esc back | q quit"
         if self.page == "form":
-            return "Up/Down or Tab | Enter edit/run | Esc back | q quit"
+            return "Up/Down or Tab | Enter edit/run | F2 pick | Esc back"
         return "Up/Down or j/k | Enter open | r refresh | Esc back | q quit"
 
     def render(self):
@@ -226,7 +233,7 @@ class Dashboard:
         category, actions = CATALOG[self.category]
         title = {"home": "AGENTS", "actions": category.upper(),
                  "form": category + " / " + (self.action.title if self.action else ""),
-                 "result": "COMMAND OUTPUT"}[self.page]
+                 "result": "COMMAND OUTPUT", "picker": "SELECT SAVED ENTRY"}[self.page]
         self.draw(1, 1, title, self.accent)
         body = h - 6
         if self.page == "result":
@@ -239,6 +246,12 @@ class Dashboard:
             self.scroll = min(self.scroll, max_scroll)
             for i, line in enumerate(lines[self.scroll:self.scroll+body]):
                 self.draw(2+i, 1, line)
+        elif self.page == "picker":
+            first = max(0, self.choice_index-body+1)
+            for i, (_, desc) in enumerate(self.choices[first:first+body], first):
+                selected = i == self.choice_index
+                self.draw(2+i-first, 1, ("> " if selected else "  ") + desc,
+                          self.active if selected else self.normal, fill=selected)
         else:
             if self.page == "home":
                 rows = [f"{i+1}. {name}" for i, (name, _) in enumerate(CATALOG)]
@@ -248,6 +261,8 @@ class Dashboard:
                 rows = [f"{f.name}: {self.buffer if self.editing and i == self.index else v}"
                         for i, (f, v) in enumerate(zip(self.action.fields, self.values))]
                 rows.append("[ RUN COMMAND ]")
+                if self.index < len(self.action.fields) and self.action.fields[self.index].picker:
+                    rows.append("F2: choose a saved entry")
                 if self.action.hint:
                     rows.append(self.action.hint)
                 try:
@@ -264,13 +279,13 @@ class Dashboard:
         if self.confirming:
             self.draw(h-4, 0, " CONFIRM: " + self.action.title + "? ", self.warning, True)
         else:
-            self.draw(h-4, 0, self.snapshot.summary(),
+            self.draw(h-4, 0, self.snapshot.summary(compact=w < 74),
                       self.warning if self.snapshot.tunnels and self.snapshot.tunnels["failed"]
                       else self.accent, True)
         self.draw(h-3, 0, " STATUS | " + self.status + " | " + self.detail,
                   self.warning if self.status.startswith("ERROR") else self.active, True)
         self.draw(h-2, 0, self.keys(), self.accent, True)
-        self.draw(h-1, 0, " Counts are last observed snapshots; ? = unknown.", self.normal, True)
+        self.draw(h-1, 0, " Snapshot: R ready / S starting / F failed; ? unknown", self.normal, True)
         s.refresh()
 
     def set_result(self, args, result):
@@ -303,6 +318,25 @@ class Dashboard:
             self.detail = "Counts incomplete; open agent list for details"
         else:
             self.status, self.detail = "OK", "Counts refreshed"
+
+    def open_picker(self):
+        field = self.action.fields[self.index]
+        args = ["-" + field.picker, "-list"]
+        self.status, self.detail = "RUNNING", "Loading saved entries"
+        self.render()
+        result = self.runner(args)
+        self.snapshot.observe(args, result)
+        if result.code or result.truncated:
+            self.status, self.detail = "ERROR picker", "List failed; open agent list for details"
+            return
+        self.choices = [(line.split()[0], line) for line in result.stdout.splitlines()
+                        if line.strip()]
+        if not self.choices:
+            self.status, self.detail = "READY", "No saved entries"
+            return
+        self.choice_index = 0
+        self.page = "picker"
+        self.status, self.detail = "OK", "Select a saved entry"
 
     def execute(self):
         try:
@@ -339,7 +373,9 @@ class Dashboard:
         self.set_result(args, result)
 
     def back(self):
-        if self.page == "result":
+        if self.page == "picker":
+            self.page = "form"
+        elif self.page == "result":
             self.page = "form"
             self.index = len(self.action.fields)
         elif self.page == "form":
@@ -387,6 +423,19 @@ class Dashboard:
             return True
         if key == "r" and self.page in ("home", "actions"):
             self.refresh_counts()
+            return True
+        if self.page == "picker":
+            if key in (c.KEY_UP, "k"):
+                self.choice_index = (self.choice_index-1) % len(self.choices)
+            elif key in (c.KEY_DOWN, "j"):
+                self.choice_index = (self.choice_index+1) % len(self.choices)
+            elif enter:
+                self.values[self.index] = self.choices[self.choice_index][0]
+                self.page = "form"
+            return True
+        if self.page == "form" and key == c.KEY_F2 and self.index < len(self.action.fields):
+            if self.action.fields[self.index].picker:
+                self.open_picker()
             return True
         if self.page == "result":
             if key in (c.KEY_UP, "k"):
