@@ -89,13 +89,17 @@ CATALOG = (
      + tuple(Action(f.capitalize(), ("-sys", "-" + f)) for f in SYSTEM) + (Action("Local interface IPs", ("-sys", "-ip")),)),
     ("Host", (
         Action("List numbered hosts", ("-host", "-list", "-ids")),
-        Action("Register IP or domain", ("-host", "-add", "-domain", 0),
-               (Field("IP or domain"),)),
+        Action("Add / update host (SSH onboarding)", ("-host", "-add", "-domain", 0, "-onboard"),
+               (Field("IP or domain"),), confirm=True,
+               hint="Use local management key; verify known host, deploy and inspect."),
+        Action("Add / update host (password / key + password)", ("-host", "-add", "-domain", 0, "-onboard", "-password"),
+               (Field("IP or domain"),), interactive=True, confirm=True,
+               hint="Native password prompt and ssh-copy-id; verify host fingerprint."),
         Action("Connect SSH", ("-host", "-ssh", "-domain", 0),
                (Field("Registered IP or domain", picker="host"),), interactive=True,
                hint="Uses your SSH configuration. Exit SSH to return."),
-        Action("Register and connect", ("-host", "-add", "-domain", 0, "-ssh"),
-               (Field("IP or domain"),), interactive=True),
+        Action("Register address only (offline)", ("-host", "-add", "-domain", 0),
+               (Field("IP or domain"),)),
         Action("Remove host", ("-host", "-remove", "-domain", 0),
                (Field("IP or domain", picker="host"),), confirm=True),
     )),
@@ -153,13 +157,16 @@ def invoke(args, interactive=False, timeout=15):
     argv = [sys.executable, str(LAUNCHER), *args]
     if args[:2] == ["-port", "-force"]:
         timeout = max(timeout, 60)
+    enrollment = args[:2] == ["-host", "-add"] and "-onboard" in args
+    if enrollment:
+        timeout = max(timeout, 450 if interactive else 180)
     try:
-        if interactive:
+        if interactive and not enrollment:
             return Result(subprocess.run(argv).returncode,
                           "Interactive SSH session ended.")
         with tempfile.TemporaryFile() as out, tempfile.TemporaryFile() as err:
-            code = subprocess.run(argv, stdin=subprocess.DEVNULL, stdout=out,
-                                  stderr=err, timeout=timeout).returncode
+            code = subprocess.run(argv, stdin=None if interactive else subprocess.DEVNULL, stdout=out,
+                                  stderr=None if interactive else err, timeout=timeout).returncode
             out.seek(0)
             err.seek(0)
             a, b = out.read(LIMIT + 1), err.read(LIMIT + 1)

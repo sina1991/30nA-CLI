@@ -47,3 +47,5 @@ clear
 در اتصال عادی SSH می‌توانید از -tui استفاده کنید. اگر روی Windows از X11 forwarding استفاده می‌کنید، ابتدا X server کلاینت را اجرا کنید و نشست SSH را با پشتیبانی X11 باز کنید. مقدار DISPLAY را SSH تنظیم می‌کند. نصب‌کننده تنظیمات sshd را ویرایش نمی‌کند.
 
 برای Port Agent ابزار ss از بسته iproute2 لازم است؛ نصب‌کننده Ubuntu آن را در پیش‌نیازها بررسی می‌کند.
+
+برای نصب Remote با SSH، [Host Onboarding](HOST_ONBOARDING.md) را ببینید. نصب از checkout تمیز Git نشانگر .revision را در Release ذخیره می‌کند.

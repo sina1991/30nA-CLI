@@ -119,7 +119,12 @@ class DashboardTests(unittest.TestCase):
         actions = dict(CATALOG)
         self.assertEqual(len(actions["Calculator"]), 5)
         self.assertEqual(len(actions["System"]), 9)
-        self.assertEqual(len(actions["Host"]), 5)
+        self.assertEqual(len(actions["Host"]), 6)
+        self.assertTrue(actions["Host"][1].confirm)
+        self.assertTrue(actions["Host"][2].interactive)
+        self.assertTrue(actions["Host"][2].confirm)
+        self.assertEqual(actions["Host"][2].command(["ssh.example.test"]),
+                         ["-host", "-add", "-domain", "ssh.example.test", "-onboard", "-password"])
         self.assertEqual(len(actions["Tunnel"]), 4)
         self.assertEqual(len(actions["Help"]), 8)
         self.assertEqual(len(actions["Ports"]), 8)

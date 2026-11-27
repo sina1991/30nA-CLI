@@ -71,3 +71,9 @@ System Agent با گزینه -ip آدرس‌های Interface محلی را از 
 Local فیروزه‌ای، Remote ارغوانی؛ Tunnel Ready سبز، Starting زرد، Failed قرمز. متن نقش/وضعیت در ترمینال بدون رنگ نیز حفظ می‌شود. کلید h فهرست عمومی Systemd را Hide/Show می‌کند؛ پیش‌فرض مخفی است. Workerهای داخلی، Tunnelها، Hostها، و Unitهای فعال از تاریخچه Start/Restart همین Agent باقی می‌مانند. تاریخچه نشان‌دهنده مدیریت توسط برنامه است، نه مالکیت انحصاری یا اینکه Unit حتماً نخستین بار توسط برنامه راه‌اندازی شده است. فهرست Port همچنان مربوط به کل سیستم است. اطلاعات مشاهده‌شده با r تازه می‌شوند. فرم Tunnel چهار فیلد دارد و پیش‌نمایش CLI بدون Target نمایش داده می‌شود. Restore پیشرفته فقط در CLI اختیاری است.
 
 پس از عملیات موفق Host/Tunnel/Service/Force، Snapshotهای مرتبط به‌صورت خودکار تازه می‌شوند. پورت‌های پیشنهادی مقدار فعلی را انتخاب‌شده نگه می‌دارند. پنل Tunnel جدید هر دو پورت را با F و R نمایش می‌دهد؛ جهت > برای Forward و < برای Reverse است.
+
+## Host Onboarding
+
+در Host، دو گزینه Add / update host برای Key و Password/Key+Password وجود دارد. گزینه دوم موقتاً curses را ترک می‌کند تا OpenSSH رمز را در Prompt بگیرد و سپس گزارش را در TUI نمایش دهد. Register address only ثبت آفلاین است. [راهنما](HOST_ONBOARDING.md).
+
+در Onboarding، ابتدا کلیدهای مدیریت محلی بررسی می‌شوند؛ در گزینه Password، در صورت نیاز ssh-copy-id فقط کلید عمومی را ثبت می‌کند. [راهنما](HOST_ONBOARDING.md).
