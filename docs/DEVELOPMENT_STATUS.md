@@ -35,3 +35,7 @@ Local ID 1, stable remote IDs, fixed local/remote ports. Validate current PR CI.
 ## Host onboarding
 
 Authenticated pinned deployment and observed remote inventory with key or native interactive authentication. Exact-head CI required; centralized remote tunnel execution remains separate.
+
+## Remote topology
+
+PR #12: 105/105 passed on tested merge tree. External tunnel inventory is a separate read-only phase; new two-VPS provisioning remains pending. See [design](REMOTE_TUNNEL_ARCHITECTURE.md).

@@ -28,6 +28,16 @@ def validate(value):
     value["ips"] = checked_ips(value["ips"])
     if type(value["complete"]) is not bool or not isinstance(value["units"], list) or len(value["units"]) > MAX_UNITS:
         raise ValueError("Invalid probe inventory")
+    listeners = value["listeners"]
+    if listeners is not None:
+        if not isinstance(listeners, list) or len(listeners) > 4096:
+            raise ValueError("Invalid listener inventory")
+        for listener in listeners:
+            if type(listener["port"]) is not int or not 1 <= listener["port"] <= 65535 or not isinstance(listener["addr"], str) or not isinstance(listener["owners"], list):
+                raise ValueError("Invalid listener")
+            for name, pid in listener["owners"]:
+                if name not in ("ssh", "sshd", "sshd-session") or type(pid) is not int or pid <= 0:
+                    raise ValueError("Invalid listener owner")
     for row in value["units"]:
         if not UNIT.fullmatch(row["unit"]) or type(row["recognized"]) is not bool:
             raise ValueError("Invalid unit")
@@ -42,6 +52,8 @@ def validate(value):
         for name in ("local_port", "remote_port", "ssh_port"):
             if type(row[name]) is not int or not 1 <= row[name] <= 65535:
                 raise ValueError("Invalid port")
+        if type(row["pid"]) is not int or row["pid"] < 0:
+            raise ValueError("Invalid service PID")
         row["peer_ips"] = checked_ips(row["peer_ips"])
     return value
 
@@ -78,19 +90,52 @@ def identify_peer(row, nodes, client):
     return matches[0] if len(matches) == 1 else None
 
 
+def listener_status(row, local_probe):
+    if local_probe is None or local_probe["listeners"] is None:
+        return "UNKNOWN"
+    listeners = [listener for listener in local_probe["listeners"]
+                 if listener["port"] == row["local_port"]]
+    if not listeners:
+        return "ABSENT"
+    for listener in listeners:
+        # Public wildcard and loopback are not interchangeable.
+        if listener["addr"] not in (("0.0.0.0", "*") if row["bind"] == "0.0.0.0" else ("127.0.0.1",)):
+            continue
+        if row["mode"] == "forward" and row["pid"] > 0:
+            if ["ssh", row["pid"]] in listener["owners"]:
+                return "MATCHED_PID"
+        elif row["mode"] == "reverse" and any(name in ("sshd", "sshd-session") for name, _ in listener["owners"]):
+            return "SSHD_OBSERVED"
+    return "UNVERIFIED_OWNER_OR_BIND"
+
+
 def render(nodes):
-    # Refuse to resolve aliases as distinct nodes when their machine IDs match.
-    counts = {}
-    for _, probe in nodes.values():
+    # Local ID 1 is authoritative for aliases of this machine. Multiple
+    # remote IDs with the same machine ID remain ambiguous, not distinct hosts.
+    groups = {}
+    for number, (_, probe) in nodes.items():
         if probe:
-            counts[probe["machine"]] = counts.get(probe["machine"], 0) + 1
+            groups.setdefault(probe["machine"], []).append(number)
+    aliases = {}
+    excluded = set()
+    for ids in groups.values():
+        if len(ids) > 1:
+            if 1 in ids:
+                aliases.update({number: 1 for number in ids if number != 1})
+            else:
+                excluded.update(ids)
+    unique = {number: data for number, data in nodes.items()
+              if number not in aliases and number not in excluded}
     incomplete = False
     for number, (address, probe) in nodes.items():
         if probe is None:
             print(f"HOST {number} {address} inventory=UNKNOWN")
             incomplete = True
             continue
-        if counts[probe["machine"]] > 1:
+        if number in aliases:
+            print(f"HOST {number} {address} inventory=LOCAL_ALIAS canonical_id=1")
+            continue
+        if number in excluded:
             print(f"HOST {number} {address} inventory=AMBIGUOUS duplicate_machine")
             incomplete = True
             continue
@@ -101,18 +146,21 @@ def render(nodes):
                 print(f"  unit={row['unit']} topology=UNKNOWN ownership=external")
                 incomplete = True
                 continue
-            peer = identify_peer(row, nodes, number)
-            if peer is not None and counts[nodes[peer][1]["machine"]] != 1:
-                peer = None
+            peer = identify_peer(row, unique, number)
+            # An exact registered alias of the observed local machine is
+            # sufficient for an inventory candidate, but not authorization.
+            if peer is None and number != 1 and any(nodes[alias][0] == row["ssh_peer"] for alias in aliases):
+                peer = 1
             if peer is None:
                 incomplete = True
             peer_id = peer if peer is not None else "?"
             local, remote = (number, peer_id) if row["mode"] == "forward" else (peer_id, number)
+            listener = listener_status(row, unique.get(local, (None, None))[1])
             print(f"  {row['mode']} local_id={local} local_port={row['local_port']} "
                   f"remote_id={remote} remote_port={row['remote_port']} ssh_client_id={number} "
                   f"ssh_peer={row['ssh_peer']} ssh_port={row['ssh_port']} bind={row['bind']} "
-                  f"unit={row['unit']} service_state={row['state']} ownership=external")
-    print("Observed unit configuration only; no end-to-end TCP health claim. No changes made.")
+                  f"unit={row['unit']} service_state={row['state']} listener={listener} ownership=external")
+    print("Observed configuration and socket evidence only; no end-to-end TCP health claim. No changes made.")
     return 1 if incomplete else 0
 
 
@@ -128,7 +176,10 @@ def discover(remote_id=None):
         raise UsageError("Remote host ID not found")
     if len(remotes) > MAX_HOSTS:
         raise UsageError("Too many hosts for one discovery; select -remote-id")
-    key = existing_identity() if remotes else None
+    try:
+        key = existing_identity() if remotes else None
+    except (OSError, RuntimeError):
+        key = None
     nodes = {1: ("LOCAL", collect())}
     with ThreadPoolExecutor(max_workers=4) as pool:
         probes = list(pool.map(lambda row: collect(row[1], key), remotes))

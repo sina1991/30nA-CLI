@@ -117,3 +117,13 @@ clear
 ```
 
 [راهنمای Host Onboarding](HOST_ONBOARDING.md).
+
+## کشف Tunnelهای خارجی
+
+```bash
+clear
+30na -tunnel -discover
+30na -tunnel -discover -remote-id 2
+```
+
+بررسی خواندنی سرویس‌های شناخته‌شده Local/Remote؛ [جزئیات و محدودیت‌ها](REMOTE_TUNNEL_ARCHITECTURE.md).

@@ -78,11 +78,32 @@ def resolve(peer):
         return []
 
 
+def listening():
+    rows = []
+    for line in run(["ss", "-H", "-ltnp"]).splitlines():
+        parts = line.split(None, 5)
+        if len(parts) < 5:
+            continue
+        addr, _, port = parts[3].rpartition(":")
+        if not port.isdecimal() or not 1 <= int(port) <= 65535:
+            continue
+        owners = []
+        if len(parts) == 6:
+            for name, pid in re.findall(r'"(ssh|sshd|sshd-session)",pid=(\d+)', parts[5]):
+                owners.append([name, int(pid)])
+        rows.append(dict(port=int(port), addr=addr, owners=owners))
+    return rows[:4096]
+
+
 def probe():
     machine = Path("/etc/machine-id").read_bytes().strip()
     if not re.fullmatch(rb"[0-9a-f]{32}", machine):
         raise RuntimeError("Machine identity unavailable")
-    result = dict(machine=hashlib.sha256(machine).hexdigest(), ips=addresses(), units=[], complete=True)
+    result = dict(machine=hashlib.sha256(machine).hexdigest(), ips=addresses(), units=[], complete=True, listeners=None)
+    try:
+        result["listeners"] = listening()
+    except (OSError, RuntimeError, subprocess.SubprocessError):
+        result["complete"] = False
     listing = run(["systemctl", "--no-pager", "--no-legend", "--plain",
                    "list-units", "--all", "--type=service"])
     units = sorted({line.split()[0] for line in listing.splitlines()
@@ -101,7 +122,8 @@ def probe():
             if state not in ("active", "inactive", "failed", "activating", "deactivating"):
                 state = "unknown"
             result["units"].append(dict(unit=unit, recognized=True, state=state,
-                                        peer_ips=resolve(spec["ssh_peer"]), **spec))
+                                        peer_ips=resolve(spec["ssh_peer"]),
+                                        pid=int(props.get("MainPID", "0")) if props.get("MainPID", "").isdecimal() else 0, **spec))
         except (OSError, RuntimeError, subprocess.SubprocessError):
             result["units"].append(dict(unit=unit, recognized=False))
             result["complete"] = False
