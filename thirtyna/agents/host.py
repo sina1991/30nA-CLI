@@ -20,9 +20,15 @@ def run(argv):
     endpoint.add_argument("-ip", nargs="?", const="", metavar="ADDRESS", help="IPv4, IPv6 or DNS name")
     endpoint.add_argument("-domain", dest="ip", nargs="?", const="", metavar="NAME", help="Alias for -ip")
     cli.add_argument("-ssh", action="store_true")
+    cli.add_argument("-ids", action="store_true", help="Numbered local/remote inventory (with -list)")
     args = cli.parse_args(argv)
     agent = control("ensure", bootstrap=True)
     address = None
+    if args.ids:
+        if not args.list or args.ip is not None or args.ssh:
+            raise UsageError("Use -list -ids")
+        from thirtyna.endpoints import host_ids
+        return host_ids(agent)
     if args.list:
         if args.ip is not None or args.ssh:
             raise UsageError("-list takes no other options")

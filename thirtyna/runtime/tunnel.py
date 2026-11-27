@@ -30,6 +30,19 @@ def _parameters(argument):
     try:
         mode = argument["mode"]
         host = host_address(argument["host"])
+        if "remote_id" in argument:
+            from thirtyna.endpoints import local_ip
+            local = local_ip(argument["local"])
+            remote_id = argument["remote_id"]
+            lp, rp = int(argument["local_port"]), int(argument["remote_port"])
+            if type(remote_id) is not int or remote_id < 2 or mode not in ("forward", "reverse") or not (1 <= lp <= 65535 and 1 <= rp <= 65535):
+                raise ValueError("Invalid endpoint parameters")
+            return dict(mode=mode, host=host, remote_id=remote_id, local=local,
+                        local_port=lp, remote_port=rp,
+                        bind=local if mode == "forward" else "127.0.0.1",
+                        listen=lp if mode == "forward" else rp,
+                        target="127.0.0.1" if mode == "forward" else local,
+                        target_port=rp if mode == "forward" else lp)
         target = str(ipaddress.ip_address(argument["target"]))
         listen = int(argument["listen"])
         target_port = int(argument["target_port"])
@@ -45,11 +58,14 @@ def set_host(info):
     _HOST = info
 
 
-def _authorize(host):
+def _authorize(host, remote_id=None):
     from thirtyna.runtime.service import request
     if _HOST is None:
         raise RuntimeError("Host Agent unavailable")
     try:
+        if remote_id is not None:
+            if request(_HOST, "lookup", remote_id, timeout=1)["value"] != host:
+                raise UsageError("Remote host identity changed")
         request(_HOST, "exists", host, timeout=1)
     except (OSError, RuntimeError) as exc:
         raise RuntimeError("Host Agent unavailable") from exc
@@ -138,7 +154,7 @@ def _launch(token, parameters, restore):
 def _restore_pending(token, item):
     try:
         spec = _parameters(item["info"])
-        _authorize(spec["host"])
+        _authorize(spec["host"], spec.get("remote_id"))
         _TUNNELS[token] = _launch(token, spec, True)
     except UsageError:
         item["pending"] = False
@@ -236,7 +252,9 @@ def _fail(item, reason):
 def _forward(item):
     info = item["info"]
     dest = f'[{info["target"]}]' if ":" in info["target"] else info["target"]
-    spec = f'127.0.0.1:{info["listen"]}:{dest}:{info["target_port"]}'
+    bind = info.get("bind", "127.0.0.1")
+    bind = f"[{bind}]" if ":" in bind else bind
+    spec = f'{bind}:{info["listen"]}:{dest}:{info["target_port"]}'
     flag = "-L" if info["mode"] == "forward" else "-R"
     # Control client must not inherit additional forwards or connect independently.
     argv = ["ssh", "-F", "/dev/null", "-S", item["socket"], "-O", "forward",
@@ -316,7 +334,7 @@ def handle(folder, op, argument):
     restore = argument.get("restore", False)
     if not isinstance(restore, bool):
         raise UsageError("Invalid restoration option")
-    _authorize(parameters["host"])
+    _authorize(parameters["host"], parameters.get("remote_id"))
     if sum(item["info"]["state"] != "failed" for item in _TUNNELS.values()) >= MAX_ACTIVE:
         raise UsageError("Too many active tunnels")
 
