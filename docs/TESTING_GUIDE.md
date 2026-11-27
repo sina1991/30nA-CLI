@@ -8,3 +8,7 @@ python3 -m unittest discover -s tests -v
 ```
 
 تست‌ها CLI را با subprocess اجرا می‌کنند. تست تعاملی از PTY، تست توسعه‌پذیری از یک package موقت و تست نصب از PREFIX و XDG_DATA_HOME ایزوله استفاده می‌کند. اجرای Pipe و redirection در Bash واقعی انجام می‌شود. تست Host یک ssh آزمایشی در PATH می‌گذارد که آرگومان‌ها را ثبت می‌کند و موفقیت یا خطا برمی‌گرداند.
+
+## CI و Tunnel
+
+Workflow در `.github/workflows/ci.yml` روی PR به main و Push به main، مجموعه کامل unittest را در Ubuntu اجرا می‌کند. نتیجه را برای SHA دقیق بررسی کنید. وجود Workflow به‌تنهایی به معنی اجرای موفق نیست. در حال حاضر تست‌های Tunnel با Mock اجرا می‌شوند؛ اجرای OpenSSH واقعی باید جداگانه با محیط ایزوله و شواهد ثبت‌شده بررسی شود. برای تست محلی از همان دستور بالا استفاده کنید.
