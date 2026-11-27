@@ -170,3 +170,23 @@ class RemoteInstallTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "installation failed"):
             onboarding.install_remote("ssh.example.test", KEY)
         self.assertEqual(run.call_args.args[0][-3:], ["root@ssh.example.test", "bash", "-s"])
+
+    def test_legacy_launcher_without_revision_is_preserved_and_migrated(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            launcher = root / "30na"
+            launcher.write_text("legacy launcher\n")
+            block = onboarding.REMOTE_INSTALL.split('if test -e "$launcher"; then', 1)[1]
+            block = 'if test -e "$launcher"; then' + block.split('echo "INSTALLING_REVISION', 1)[0]
+            backup_root = root / "backups"
+            block = block.replace("/var/backups", str(backup_root))
+            result = subprocess.run(
+                ["bash", "-euc", block],
+                env=dict(__import__("os").environ, launcher=str(launcher)),
+                capture_output=True, text=True, check=True
+            )
+            self.assertIn("Migrating unversioned installation", result.stdout)
+            backups = list(backup_root.glob("30na-upgrade.*/30na"))
+            self.assertEqual(len(backups), 1)
+            self.assertEqual(backups[0].read_text(), launcher.read_text())

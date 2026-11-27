@@ -163,13 +163,19 @@ launcher=/usr/local/bin/30na
 if test -e "$launcher"; then
     installed=$(readlink -f "$launcher")
     marker="$(dirname "$installed")/.revision"
-    test -f "$marker" || { echo "Installed revision unknown; cannot verify upgrade"; exit 1; }
-    previous=$(cat "$marker")
-    [[ "$previous" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid installed revision"; exit 1; }
-    git -C "$work" cat-file -e "$previous^{commit}" ||
-        git -C "$work" fetch origin "$previous"
-    git -C "$work" merge-base --is-ancestor "$previous" "$requested" ||
-        { echo "Refusing downgrade or divergent release"; exit 1; }
+    if test -f "$marker"; then
+        previous=$(cat "$marker")
+        [[ "$previous" =~ ^[0-9a-f]{40}$ ]] || { echo "Invalid installed revision"; exit 1; }
+        git -C "$work" cat-file -e "$previous^{commit}" ||
+            git -C "$work" fetch origin "$previous"
+        git -C "$work" merge-base --is-ancestor "$previous" "$requested" ||
+            { echo "Refusing downgrade or divergent release"; exit 1; }
+    else
+        mkdir -p /var/backups
+        backup=$(mktemp -d /var/backups/30na-upgrade.XXXXXXXX)
+        cp -a -- "$launcher" "$backup/30na"
+        echo "Migrating unversioned installation; previous launcher saved in $backup"
+    fi
 fi
 echo "INSTALLING_REVISION $requested"
 bash "$work/install.sh" </dev/null
